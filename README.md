@@ -25,28 +25,35 @@ DS18B20 × N    ─┼─► main.py ──► Firestore ──► onSnapshot �
 
 ## Setup (einmalig)
 
-### 1. Firebase-Projekt anlegen
-1. https://console.firebase.google.com → neues Projekt `stockwaage`
-2. **Authentication** aktivieren → Email/Password
-3. User anlegen: deine Mail + ein Pi-User (`pi@stockwaage.local`)
-4. **Firestore** aktivieren (Region: `europe-west3`, Modus: production)
-5. Web-App registrieren → Config kopieren nach `web/.env.local`
-6. Pi-Auth: Pi nutzt Email/Password – Zugangsdaten in `pi/config.local.json`
+### 1. Firebase-Projekt (bereits eingerichtet)
+- Projekt: `stockwaage-132b6`
+- Owner: `markus@strogg.de` (UID in `firestore.rules` und `web/lib/firebase.ts` hinterlegt)
+- Firestore-Region: europe-west3
 
-### 2. Web-UI lokal
+### 2. Firestore Rules deployen
+Einmalig:
+```bash
+npm install -g firebase-tools
+firebase login
+firebase use stockwaage-132b6
+firebase deploy --only firestore:rules
+```
+
+### 3. Web-UI lokal
 ```bash
 cd web
 npm install
-cp .env.example .env.local   # Firebase-Config eintragen
 npm run dev
+# → http://localhost:3000, Login mit markus@strogg.de
 ```
 
-### 3. Pi-Service lokal testen (ohne echte Hardware)
+### 4. Pi-Service lokal testen (ohne echte Hardware)
 ```bash
 cd pi
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp config.example.json config.local.json   # Zugangsdaten eintragen
+cp config.example.json config.local.json
+# In config.local.json das Firebase-Passwort eintragen
 python main.py --mock
 ```
 

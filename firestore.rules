@@ -11,15 +11,11 @@ service cloud.firestore {
     // Pi-Accounts: dürfen lesen + schreiben, aber kein Owner-Wechsel.
 
     function ownerUid() {
-      return 'OWNER_UID_HIER_EINTRAGEN';
+      return 'F1k284u9bmbJcOkEqt7O8BNOLN53';
     }
 
     function isAllowed() {
-      return request.auth != null && request.auth.uid in [
-        ownerUid()
-        // , 'PI_UID_1'
-        // , 'PI_UID_2'
-      ];
+      return request.auth != null && request.auth.uid == ownerUid();
     }
 
     match /users/{uid}/{document=**} {
