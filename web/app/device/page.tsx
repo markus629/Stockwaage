@@ -18,7 +18,6 @@ import {
   readingsCol,
   scalesCol,
   updateMainConfig,
-  updateScaleConfig,
   SCALE_IDS,
   type Device,
   type MainConfig,
@@ -26,8 +25,8 @@ import {
   type ScaleConfig,
 } from "@/lib/devices";
 import CalibrationWizard from "@/components/CalibrationWizard";
-import LearningPhase from "@/components/LearningPhase";
-import ScaleChart from "@/components/ScaleChart";
+import ScaleCard from "@/components/ScaleCard";
+import { useScaleUiPrefs } from "@/lib/uiPrefs";
 
 const DAYS_DEFAULT = 7;
 const DAYS_MIN = 1;
@@ -52,6 +51,7 @@ function DeviceDetail() {
   const [windowReadings, setWindowReadings] = useState<Reading[]>([]);
   const [wizardFor, setWizardFor] = useState<string | null>(null);
   const [days, setDays] = useState<number>(DAYS_DEFAULT);
+  const uiPrefs = useScaleUiPrefs(deviceId);
 
   useEffect(() => onAuthStateChanged(auth, setUser), []);
 
@@ -236,79 +236,19 @@ function DeviceDetail() {
           Waagen
         </h2>
         <ul className="grid gap-3">
-          {SCALE_IDS.map((sid) => {
-            const cfg = scales[sid] ?? { id: sid };
-            const reading = latest?.scales?.[sid];
-            const calibrated = (cfg.scaleFactor ?? 0) !== 0;
-            return (
-              <li
-                key={sid}
-                className="rounded-lg border border-neutral-200 bg-white p-4"
-              >
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={cfg.enabled ?? false}
-                      onChange={(e) =>
-                        updateScaleConfig(deviceId, sid, {
-                          enabled: e.target.checked,
-                        })
-                      }
-                    />
-                    <input
-                      type="text"
-                      value={cfg.name ?? ""}
-                      placeholder={sid}
-                      onChange={(e) =>
-                        updateScaleConfig(deviceId, sid, {
-                          name: e.target.value,
-                        })
-                      }
-                      className="rounded border border-neutral-200 px-2 py-0.5 text-sm"
-                    />
-                    <span className="text-xs text-neutral-400">{sid}</span>
-                  </div>
-                  <button
-                    onClick={() => setWizardFor(sid)}
-                    className="rounded border border-neutral-300 bg-white px-2 py-1 text-xs hover:bg-neutral-100"
-                  >
-                    Kalibrieren
-                  </button>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
-                    <span className="text-neutral-500">Rohwert</span>
-                    <span className="text-right font-mono">
-                      {reading?.raw !== undefined
-                        ? reading.raw.toFixed(0)
-                        : "—"}
-                    </span>
-                    <span className="text-neutral-500">Gewicht</span>
-                    <span className="text-right font-mono">
-                      {reading?.kg !== undefined
-                        ? `${reading.kg.toFixed(2)} kg`
-                        : calibrated
-                          ? "—"
-                          : "nicht kalibriert"}
-                    </span>
-                    <span className="text-neutral-500">Offset</span>
-                    <span className="text-right font-mono">
-                      {cfg.offset?.toFixed(0) ?? "0"}
-                    </span>
-                    <span className="text-neutral-500">Faktor</span>
-                    <span className="text-right font-mono">
-                      {cfg.scaleFactor?.toFixed(2) ?? "—"}
-                    </span>
-                  </div>
-                  <LearningPhase deviceId={deviceId} scale={cfg} />
-                </div>
-
-                <ScaleChart scaleId={sid} readings={windowReadings} />
-              </li>
-            );
-          })}
+          {SCALE_IDS.map((sid) => (
+            <ScaleCard
+              key={sid}
+              deviceId={deviceId}
+              scaleId={sid}
+              cfg={scales[sid] ?? { id: sid }}
+              reading={latest?.scales?.[sid]}
+              readings={windowReadings}
+              prefs={uiPrefs.get(sid)}
+              onPrefsChange={(patch) => uiPrefs.set(sid, patch)}
+              onCalibrate={() => setWizardFor(sid)}
+            />
+          ))}
         </ul>
       </section>
 

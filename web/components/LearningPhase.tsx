@@ -177,9 +177,7 @@ export default function LearningPhase({ deviceId, scale }: Props) {
   }
 
   return (
-    <div className="rounded border border-neutral-200 bg-neutral-50 p-3">
-      <h4 className="mb-2 text-sm font-medium">Temperaturkompensation</h4>
-
+    <div>
       {!learningStartedAt && (
         <>
           <p className="mb-2 text-xs text-neutral-600">
