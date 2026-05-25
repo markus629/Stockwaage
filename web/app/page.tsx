@@ -170,8 +170,8 @@ export default function Home() {
             <p className="text-neutral-500">Noch keine Messwerte.</p>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
-              <Card title="Waagen (kg)" data={latest.scales} unit="kg" />
-              <Card title="Temperaturen (°C)" data={latest.temps} unit="°C" />
+              <Card title="Waagen (Rohwert)" data={latest.scales} unit="" digits={0} />
+              <Card title="Temperaturen" data={latest.temps} unit="°C" digits={2} />
             </div>
           )}
           {latest && (
@@ -189,24 +189,32 @@ function Card({
   title,
   data,
   unit,
+  digits = 2,
 }: {
   title: string;
   data: Record<string, number>;
   unit: string;
+  digits?: number;
 }) {
+  const entries = Object.entries(data);
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-4">
       <h3 className="mb-2 text-sm font-medium text-neutral-600">{title}</h3>
-      <ul className="space-y-1">
-        {Object.entries(data).map(([k, v]) => (
-          <li key={k} className="flex justify-between font-mono text-sm">
-            <span className="text-neutral-500">{k}</span>
-            <span>
-              {v.toFixed(2)} {unit}
-            </span>
-          </li>
-        ))}
-      </ul>
+      {entries.length === 0 ? (
+        <p className="text-xs text-neutral-400">keine</p>
+      ) : (
+        <ul className="space-y-1">
+          {entries.map(([k, v]) => (
+            <li key={k} className="flex justify-between font-mono text-sm">
+              <span className="text-neutral-500">{k}</span>
+              <span>
+                {v.toFixed(digits)}
+                {unit ? ` ${unit}` : ""}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

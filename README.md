@@ -1,37 +1,35 @@
 # Stockwaage
 
-Bienenstockwaage mit Raspberry Pi (HX711 + DS18B20) und Firebase-Backend.
-Web-UI in Next.js, Daten in Firestore, Multi-Pi-fähig.
+Bienenstockwaage mit ESP32 (HX711 + DS18B20) und Firebase-Backend.
+Web-UI in Next.js, Daten in Firestore, Akku/Solar-tauglich dank Deep Sleep.
 
 ## Architektur
 
 ```
-Raspberry Pi              Firebase (Spark Free)        Browser
-─────────────             ─────────────────────        ───────
-HX711 × N      ─┐                                      Next.js UI
-DS18B20 × N    ─┼─► main.py ──► Firestore ──► onSnapshot ─► Live Dashboard
-                 │              ▲                              │
-                 │ Listener ◄───┘ config + commands ◄──────────┘
-                 │
-                 └─ SQLite Offline-Puffer
+ESP32 WROOM-32                Firebase (Spark Free)        Browser
+─────────────────             ─────────────────────        ───────
+8x HX711  ─┐                                               Next.js UI
+DS18B20 x─┼─► Firmware ──► Firestore ──► onSnapshot ─► Live Dashboard
+VBat-ADC  │   Wake/Read/Send/Sleep
+          │
+          └─ WiFiManager Captive Portal beim Erst-Setup
 ```
 
 ## Verzeichnisstruktur
 
-- `pi/` – Python-Service für den Raspberry Pi
+- `firmware/stockwaage/` – ESP32 Arduino-Sketch
 - `web/` – Next.js Web-UI
 - `firestore.rules` – Security Rules
 - `firebase.json` – Firebase-Projekt-Konfig
 
-## Setup (einmalig)
+## Setup
 
-### 1. Firebase-Projekt (bereits eingerichtet)
-- Projekt: `stockwaage-132b6`
-- Owner: `markus@strogg.de` (UID in `firestore.rules` und `web/lib/firebase.ts` hinterlegt)
-- Firestore-Region: europe-west3
+### 1. Firebase (bereits eingerichtet)
+- Projekt: `stockwaage-132b6`, Region: europe-west3
+- Owner-UID: `F1k284u9bmbJcOkEqt7O8BNOLN53`
+- Login: `markus@strogg.de`
 
-### 2. Firestore Rules deployen
-Einmalig:
+### 2. Firestore Rules deployen (einmalig)
 ```bash
 npm install -g firebase-tools
 firebase login
@@ -39,32 +37,26 @@ firebase use stockwaage-132b6
 firebase deploy --only firestore:rules
 ```
 
-### 3. Web-UI lokal
+### 3. Web-UI starten
 ```bash
 cd web
 npm install
-npm run dev
-# → http://localhost:3000, Login mit markus@strogg.de
+npm run dev   # http://localhost:3000
 ```
 
-### 4. Pi-Service lokal testen (ohne echte Hardware)
-```bash
-cd pi
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp config.example.json config.local.json
-# In config.local.json das Firebase-Passwort eintragen
-python main.py --mock
-```
+### 4. Firmware flashen
+Siehe `firmware/README.md` für Hardware-Verkabelung und Arduino-IDE-Setup.
+Erstinbetriebnahme: ESP einschalten → WLAN `stockwaage-setup` verbinden →
+Heim-WLAN + Firebase-Passwort eingeben → fertig.
 
 ## Status
 
 - [x] Repo-Skelett
-- [ ] Pi schreibt Dummy-Werte → Firestore
-- [ ] Web-UI zeigt Live-Werte
-- [ ] HX711-Integration
-- [ ] Konfig-UI + Live-Reload
-- [ ] Kalibrier-Wizard
-- [ ] DS18B20
-- [ ] Charts
-- [ ] Multi-Pi-Test
+- [x] Web-UI: Login + Geräte-Liste + Live-Werte
+- [x] Firestore Rules
+- [x] ESP32-Firmware: WiFiManager + HX711 + DS18B20 + Deep Sleep
+- [ ] Erstes echtes Reading vom ESP empfangen
+- [ ] Kalibrierung der Waagen (UI + Firmware-Reload)
+- [ ] Charts (24h / 7d / Saison)
+- [ ] Konfig-Reload aus Firestore (Intervall, Sensor-Mapping)
+- [ ] Mehrere ESPs / Geräte
