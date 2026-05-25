@@ -1,73 +1,34 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   signInWithEmailAndPassword,
   onAuthStateChanged,
   signOut,
   type User,
 } from "firebase/auth";
-import {
-  collection,
-  doc,
-  onSnapshot,
-  orderBy,
-  query,
-  limit,
-} from "firebase/firestore";
-import { auth, db, ownerUid } from "@/lib/firebase";
-
-type Reading = {
-  ts: number;
-  scales: Record<string, number>;
-  temps: Record<string, number>;
-};
-
-type Device = {
-  id: string;
-  deviceId?: string;
-  lastSeen?: number;
-};
+import { onSnapshot } from "firebase/firestore";
+import { auth } from "@/lib/firebase";
+import { devicesCol, type Device } from "@/lib/devices";
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState<string | null>(null);
-
   const [devices, setDevices] = useState<Device[]>([]);
-  const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
-  const [latest, setLatest] = useState<Reading | null>(null);
 
   useEffect(() => onAuthStateChanged(auth, setUser), []);
 
   useEffect(() => {
-    if (!user || !ownerUid) return;
-    const q = collection(db, "users", ownerUid, "devices");
-    return onSnapshot(q, (snap) => {
-      const list: Device[] = snap.docs.map((d) => ({
-        id: d.id,
-        ...(d.data() as Omit<Device, "id">),
-      }));
-      setDevices(list);
-      if (!selectedDevice && list.length > 0) {
-        setSelectedDevice(list[0]!.id);
-      }
+    if (!user) return;
+    return onSnapshot(devicesCol(), (snap) => {
+      setDevices(
+        snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Device, "id">) })),
+      );
     });
-  }, [user, selectedDevice]);
-
-  useEffect(() => {
-    if (!user || !ownerUid || !selectedDevice) return;
-    const q = query(
-      collection(db, "users", ownerUid, "devices", selectedDevice, "readings"),
-      orderBy("ts", "desc"),
-      limit(1),
-    );
-    return onSnapshot(q, (snap) => {
-      const d = snap.docs[0];
-      setLatest(d ? (d.data() as Reading) : null);
-    });
-  }, [user, selectedDevice]);
+  }, [user]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -106,9 +67,7 @@ export default function Home() {
           >
             Anmelden
           </button>
-          {loginError && (
-            <p className="text-sm text-red-600">{loginError}</p>
-          )}
+          {loginError && <p className="text-sm text-red-600">{loginError}</p>}
         </form>
       </main>
     );
@@ -129,93 +88,38 @@ export default function Home() {
         </div>
       </header>
 
-      <section className="mb-6">
-        <h2 className="mb-2 text-sm font-medium uppercase tracking-wide text-neutral-500">
-          Geräte
-        </h2>
-        {devices.length === 0 ? (
-          <p className="text-neutral-500">
-            Noch keine Geräte. Starte den Pi-Service.
-          </p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {devices.map((d) => (
-              <button
-                key={d.id}
-                onClick={() => setSelectedDevice(d.id)}
-                className={`rounded border px-3 py-1 text-sm ${
-                  selectedDevice === d.id
-                    ? "border-neutral-900 bg-neutral-900 text-white"
-                    : "border-neutral-300 hover:bg-neutral-100"
-                }`}
-              >
-                {d.id}
-                {d.lastSeen && (
-                  <span className="ml-2 text-xs opacity-70">
-                    {formatAgo(d.lastSeen)}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {selectedDevice && (
-        <section>
-          <h2 className="mb-2 text-sm font-medium uppercase tracking-wide text-neutral-500">
-            Letzte Messung
-          </h2>
-          {!latest ? (
-            <p className="text-neutral-500">Noch keine Messwerte.</p>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Card title="Waagen (Rohwert)" data={latest.scales} unit="" digits={0} />
-              <Card title="Temperaturen" data={latest.temps} unit="°C" digits={2} />
-            </div>
-          )}
-          {latest && (
-            <p className="mt-3 text-xs text-neutral-500">
-              {new Date(latest.ts).toLocaleString("de-DE")}
-            </p>
-          )}
-        </section>
-      )}
-    </main>
-  );
-}
-
-function Card({
-  title,
-  data,
-  unit,
-  digits = 2,
-}: {
-  title: string;
-  data: Record<string, number>;
-  unit: string;
-  digits?: number;
-}) {
-  const entries = Object.entries(data);
-  return (
-    <div className="rounded-lg border border-neutral-200 bg-white p-4">
-      <h3 className="mb-2 text-sm font-medium text-neutral-600">{title}</h3>
-      {entries.length === 0 ? (
-        <p className="text-xs text-neutral-400">keine</p>
+      <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-neutral-500">
+        Geräte
+      </h2>
+      {devices.length === 0 ? (
+        <p className="text-neutral-500">
+          Noch keine Geräte. Starte den ESP, sobald er sich verbunden hat,
+          erscheint er hier.
+        </p>
       ) : (
-        <ul className="space-y-1">
-          {entries.map(([k, v]) => (
-            <li key={k} className="flex justify-between font-mono text-sm">
-              <span className="text-neutral-500">{k}</span>
-              <span>
-                {v.toFixed(digits)}
-                {unit ? ` ${unit}` : ""}
-              </span>
+        <ul className="grid gap-3 sm:grid-cols-2">
+          {devices.map((d) => (
+            <li key={d.id}>
+              <Link
+                href={`/devices/${d.id}`}
+                className="block rounded-lg border border-neutral-200 bg-white p-4 transition hover:border-neutral-400"
+              >
+                <div className="flex items-baseline justify-between">
+                  <span className="font-medium">{d.id}</span>
+                  <span className="text-xs text-neutral-500">
+                    {d.lastSeen ? formatAgo(d.lastSeen) : "—"}
+                  </span>
+                </div>
+                <div className="mt-1 flex gap-4 text-xs text-neutral-500">
+                  {d.vBat !== undefined && <span>Akku {d.vBat.toFixed(2)} V</span>}
+                  {d.intervalSec && <span>Intervall {d.intervalSec}s</span>}
+                </div>
+              </Link>
             </li>
           ))}
         </ul>
       )}
-    </div>
+    </main>
   );
 }
 
@@ -223,5 +127,6 @@ function formatAgo(tsMs: number): string {
   const sec = Math.floor((Date.now() - tsMs) / 1000);
   if (sec < 60) return `vor ${sec}s`;
   if (sec < 3600) return `vor ${Math.floor(sec / 60)}min`;
-  return `vor ${Math.floor(sec / 3600)}h`;
+  if (sec < 86400) return `vor ${Math.floor(sec / 3600)}h`;
+  return `vor ${Math.floor(sec / 86400)}d`;
 }

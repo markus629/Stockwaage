@@ -63,7 +63,10 @@ bool RuntimeConfig::saveScale(const String& idToken, const String& deviceId,
   fb::writeNumber (fields, "tempRefC",    s.tempRefC);
   String body;
   serializeJson(doc, body);
-  return fb::patchDoc(idToken, scaleDocPath(deviceId, idx), body);
+  // updateMask: nur die ESP-Felder ueberschreiben, damit das vom Browser
+  // gesetzte "learning"-Feld erhalten bleibt.
+  return fb::patchDoc(idToken, scaleDocPath(deviceId, idx), body,
+                      "enabled,name,offset,scaleFactor,tempCoef,tempRefC");
 }
 
 bool RuntimeConfig::saveMain(const String& idToken,
