@@ -101,7 +101,7 @@ export default function Home() {
           {devices.map((d) => (
             <li key={d.id}>
               <Link
-                href={`/devices/${d.id}`}
+                href={`/device?id=${encodeURIComponent(d.id)}`}
                 className="block rounded-lg border border-neutral-200 bg-white p-4 transition hover:border-neutral-400"
               >
                 <div className="flex items-baseline justify-between">

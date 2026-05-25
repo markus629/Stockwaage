@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "deploy": "next build && cd .. && firebase deploy --only hosting",
+    "deploy:all": "next build && cd .. && firebase deploy"
   },
   "dependencies": {
     "firebase": "^10.13.0",

@@ -37,11 +37,21 @@ firebase use stockwaage-132b6
 firebase deploy --only firestore:rules
 ```
 
-### 3. Web-UI starten
+### 3. Web-UI starten (lokal)
 ```bash
 cd web
 npm install
 npm run dev   # http://localhost:3000
+```
+
+### 3b. Web-UI deployen (Firebase Hosting, gratis)
+```bash
+cd web
+npm run deploy   # baut + deployt nach https://stockwaage-132b6.web.app
+```
+Erstmaliger Setup falls noch nicht passiert:
+```bash
+firebase use stockwaage-132b6   # einmalig
 ```
 
 ### 4. Firmware flashen

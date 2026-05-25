@@ -4,10 +4,20 @@
     "indexes": "firestore.indexes.json"
   },
   "hosting": {
-    "source": "web",
-    "frameworksBackend": {
-      "region": "europe-west3"
-    },
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+    "public": "web/out",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "cleanUrls": true,
+    "trailingSlash": true,
+    "rewrites": [
+      { "source": "**", "destination": "/index.html" }
+    ],
+    "headers": [
+      {
+        "source": "**/*.@(js|css|woff2|svg|png)",
+        "headers": [
+          { "key": "Cache-Control", "value": "public,max-age=31536000,immutable" }
+        ]
+      }
+    ]
   }
 }

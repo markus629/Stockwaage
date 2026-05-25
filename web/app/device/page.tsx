@@ -1,18 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
-  doc,
   limit,
   onSnapshot,
   orderBy,
   query,
 } from "firebase/firestore";
 import { onAuthStateChanged, type User } from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 import {
-  devicePath,
   deviceDoc,
   mainConfigDoc,
   readingsCol,
@@ -28,12 +27,17 @@ import {
 import CalibrationWizard from "@/components/CalibrationWizard";
 import LearningPhase from "@/components/LearningPhase";
 
-export default function DevicePage({
-  params,
-}: {
-  params: { id: string };
-}) {
-  const deviceId = params.id;
+export default function Page() {
+  return (
+    <Suspense fallback={<div className="p-6">Laden…</div>}>
+      <DeviceDetail />
+    </Suspense>
+  );
+}
+
+function DeviceDetail() {
+  const sp = useSearchParams();
+  const deviceId = sp.get("id") ?? "";
   const [user, setUser] = useState<User | null | "loading">("loading");
   const [device, setDevice] = useState<Device | null>(null);
   const [mainCfg, setMainCfg] = useState<MainConfig>({});
@@ -41,16 +45,10 @@ export default function DevicePage({
   const [latest, setLatest] = useState<Reading | null>(null);
   const [wizardFor, setWizardFor] = useState<string | null>(null);
 
-  useEffect(
-    () =>
-      onAuthStateChanged(auth, (u) => {
-        setUser(u);
-      }),
-    [],
-  );
+  useEffect(() => onAuthStateChanged(auth, setUser), []);
 
   useEffect(() => {
-    if (!user || user === "loading") return;
+    if (!user || user === "loading" || !deviceId) return;
     const unsubs: Array<() => void> = [];
     unsubs.push(
       onSnapshot(deviceDoc(deviceId), (s) =>
@@ -91,6 +89,14 @@ export default function DevicePage({
       <div className="p-6">
         <Link className="text-blue-600 underline" href="/">
           Bitte einloggen
+        </Link>
+      </div>
+    );
+  if (!deviceId)
+    return (
+      <div className="p-6">
+        <Link className="text-blue-600 underline" href="/">
+          Kein Gerät gewählt
         </Link>
       </div>
     );
