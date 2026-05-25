@@ -1,43 +1,43 @@
 // ============================================================================
-// Stockwaage - ESP32 Firmware
+// Stockwaage - ESP32 Firmware (Haupt-Flow)
 // ----------------------------------------------------------------------------
-// Wakeup -> WiFi (Portal beim ersten Mal) -> NTP -> Sensoren -> Firestore
-// -> Deep Sleep.
+// Wakeup -> WiFi (Portal beim ersten Mal) -> NTP -> Config laden -> Commands
+// abarbeiten -> Sensoren messen -> Firestore -> Stay-Awake-Loop oder
+// Deep Sleep.
 // ============================================================================
 
 #include <WiFi.h>
 #include <WiFiManager.h>
-#include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <Preferences.h>
-#include <HX711.h>
-#include <OneWire.h>
-#include <DallasTemperature.h>
 #include <time.h>
+#include <math.h>
 
 #include "config.h"
+#include "firebase.h"
+#include "sensors.h"
+#include "runtime_config.h"
+#include "commands.h"
 
-// ----- State (RTC-Memory ueberlebt Deep Sleep) ------------------------------
+// ----- State (ueberlebt Deep Sleep) -----------------------------------------
 RTC_DATA_ATTR int     bootCount = 0;
-RTC_DATA_ATTR uint8_t lastFailures = 0;
+RTC_DATA_ATTR uint8_t failureStreak = 0;
 
 // ----- Globals --------------------------------------------------------------
-Preferences        prefs;
-HX711              scales[NUM_SCALES];
-OneWire            oneWire(PIN_ONEWIRE);
-DallasTemperature  ds(&oneWire);
-
-String firebasePassword;
-String deviceId;
-uint32_t intervalSec;
-String idToken;
+Preferences   prefs;
+String        firebasePassword;
+String        deviceId;
+uint32_t      bootIntervalSec;       // Build-/Portal-Default
+String        idToken;
+RuntimeConfig cfg;
 
 // ============================================================================
-// Hilfsfunktionen
+// Helper
 // ============================================================================
 
 void enterDeepSleep(uint32_t seconds) {
-  Serial.printf("Deep sleep fuer %u s...\n", seconds);
+  if (seconds < 30) seconds = 30;
+  Serial.printf("Deep Sleep %u s\n", seconds);
   Serial.flush();
   esp_sleep_enable_timer_wakeup((uint64_t)seconds * 1000000ULL);
   esp_deep_sleep_start();
@@ -53,14 +53,8 @@ void loadPrefs() {
   prefs.begin("stockwaage", false);
   firebasePassword = prefs.getString("fbPass", "");
   deviceId         = prefs.getString("devId",  DEFAULT_DEVICE_ID);
-  intervalSec      = prefs.getUInt  ("interval", DEFAULT_INTERVAL_SEC);
-  Serial.printf("Prefs: devId=%s interval=%us pwSet=%d\n",
-                deviceId.c_str(), intervalSec, firebasePassword.length() > 0);
+  bootIntervalSec  = prefs.getUInt  ("interval", DEFAULT_INTERVAL_SEC);
 }
-
-// ============================================================================
-// WiFi / Captive Portal
-// ============================================================================
 
 bool ensureWiFi(bool forcePortal) {
   WiFiManager wm;
@@ -72,260 +66,180 @@ bool ensureWiFi(bool forcePortal) {
                                "type=\"password\"");
   WiFiManagerParameter idParam("devid",  "Device ID",
                                deviceId.c_str(), 32);
-  char intervalBuf[12];
-  snprintf(intervalBuf, sizeof(intervalBuf), "%u", intervalSec);
-  WiFiManagerParameter ivParam("interval", "Intervall (Sek.)",
-                               intervalBuf, 8);
+  char ivBuf[12];
+  snprintf(ivBuf, sizeof(ivBuf), "%u", bootIntervalSec);
+  WiFiManagerParameter ivParam("interval", "Intervall (Sek.)", ivBuf, 8);
+
   wm.addParameter(&pwParam);
   wm.addParameter(&idParam);
   wm.addParameter(&ivParam);
 
   bool connected;
   if (forcePortal || firebasePassword.length() == 0) {
-    Serial.println("Starte Config Portal...");
+    Serial.println("Config Portal...");
     connected = wm.startConfigPortal(AP_SSID);
   } else {
-    Serial.println("AutoConnect...");
     connected = wm.autoConnect(AP_SSID);
   }
-
   if (!connected) return false;
 
-  // Geaenderte Params persistieren
-  String newPw = pwParam.getValue();
-  String newId = idParam.getValue();
+  String   newPw = pwParam.getValue();
+  String   newId = idParam.getValue();
   uint32_t newIv = (uint32_t)atoi(ivParam.getValue());
-  if (newIv < 30) newIv = 30;   // Sicherheits-Untergrenze
+  if (newIv < 30) newIv = 30;
 
   if (newPw != firebasePassword) prefs.putString("fbPass", newPw);
   if (newId != deviceId)         prefs.putString("devId",  newId);
-  if (newIv != intervalSec)      prefs.putUInt  ("interval", newIv);
+  if (newIv != bootIntervalSec)  prefs.putUInt  ("interval", newIv);
   firebasePassword = newPw;
   deviceId         = newId;
-  intervalSec      = newIv;
+  bootIntervalSec  = newIv;
 
-  Serial.printf("WiFi verbunden: %s, IP %s\n",
+  Serial.printf("WiFi: %s, IP %s\n",
                 WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
   return true;
 }
 
-// ============================================================================
-// Zeit ueber NTP
-// ============================================================================
-
 bool syncTime() {
   configTime(0, 0, "pool.ntp.org", "time.cloudflare.com");
-  struct tm timeinfo;
-  if (!getLocalTime(&timeinfo, 5000)) {
-    Serial.println("NTP fehlgeschlagen");
-    return false;
-  }
-  Serial.printf("Zeit: %04d-%02d-%02d %02d:%02d:%02d UTC\n",
-                timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
-                timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
-  return true;
+  struct tm tm;
+  return getLocalTime(&tm, 5000);
 }
 
 // ============================================================================
-// Sensoren
+// Messzyklus: einmal Sensoren -> Firestore.
 // ============================================================================
 
-void initSensors() {
-  for (int i = 0; i < NUM_SCALES; i++) {
-    scales[i].begin(PIN_HX711_DT[i], PIN_HX711_SCK);
-  }
-  ds.begin();
-  ds.setWaitForConversion(true);
-}
+bool measureAndUpload() {
+  // 1) Sensoren lesen
+  double rawScales[NUM_SCALES];
+  sensors::readScalesRaw(rawScales);
 
-void readScalesInto(JsonObject obj) {
-  for (int i = 0; i < NUM_SCALES; i++) {
-    if (!scales[i].wait_ready_timeout(500)) {
-      Serial.printf("  scale %d: timeout\n", i + 1);
-      continue;
-    }
-    long raw = scales[i].read_average(5);
-    char key[8];
-    snprintf(key, sizeof(key), "s%d", i + 1);
-    obj[key] = (double)raw;   // unscaliert; Kalibrierung kommt spaeter
-    Serial.printf("  %s: %ld\n", key, raw);
-  }
-}
+  DynamicJsonDocument tempDoc(2048);
+  JsonObject tempsObj = tempDoc.to<JsonObject>();
+  sensors::readTemps(tempsObj);
+  float vBat = sensors::readVBat();
 
-void readTempsInto(JsonObject obj) {
-  ds.requestTemperatures();
-  int n = ds.getDeviceCount();
-  Serial.printf("DS18B20 gefunden: %d\n", n);
-  for (int i = 0; i < n; i++) {
-    DeviceAddress addr;
-    if (!ds.getAddress(addr, i)) continue;
-    float t = ds.getTempC(addr);
-    if (t == DEVICE_DISCONNECTED_C) continue;
-    char key[20];
-    snprintf(key, sizeof(key), "%02x%02x%02x%02x%02x%02x%02x%02x",
-             addr[0], addr[1], addr[2], addr[3],
-             addr[4], addr[5], addr[6], addr[7]);
-    obj[key] = t;
-    Serial.printf("  %s: %.2f C\n", key, t);
-  }
-}
-
-float readVBat() {
-  int raw = analogRead(PIN_VBAT_ADC);
-  float v = (raw / VBAT_ADC_MAX) * VBAT_ADC_REF * VBAT_DIVIDER;
-  Serial.printf("VBat: %.2f V (raw %d)\n", v, raw);
-  return v;
-}
-
-// ============================================================================
-// Firebase (REST)
-// ============================================================================
-
-bool firebaseLogin() {
-  HTTPClient http;
-  String url = String("https://identitytoolkit.googleapis.com/v1/accounts:"
-                      "signInWithPassword?key=") + FIREBASE_API_KEY;
-  http.begin(url);
-  http.addHeader("Content-Type", "application/json");
-
-  StaticJsonDocument<256> req;
-  req["email"] = FIREBASE_EMAIL;
-  req["password"] = firebasePassword;
-  req["returnSecureToken"] = true;
-  String body;
-  serializeJson(req, body);
-
-  int code = http.POST(body);
-  String resp = http.getString();
-  http.end();
-
-  if (code != 200) {
-    Serial.printf("Login fehlgeschlagen: %d\n%s\n", code, resp.c_str());
-    return false;
+  // Aussentemperatur aus konfigurierter Sensor-Adresse, sonst Durchschnitt
+  double ambientC = NAN;
+  if (cfg.main.ambientTempAddr.length() > 0 &&
+      tempsObj.containsKey(cfg.main.ambientTempAddr.c_str())) {
+    ambientC = tempsObj[cfg.main.ambientTempAddr.c_str()].as<double>();
+  } else if (!tempsObj.isNull()) {
+    double sum = 0; int n = 0;
+    for (JsonPair kv : tempsObj) { sum += kv.value().as<double>(); n++; }
+    if (n > 0) ambientC = sum / n;
   }
 
-  DynamicJsonDocument res(2048);
-  if (deserializeJson(res, resp)) return false;
-  idToken = String((const char*)res["idToken"]);
-  return idToken.length() > 0;
-}
-
-bool firestorePatch(const String& docPath, const String& body) {
-  HTTPClient http;
-  String url = String("https://firestore.googleapis.com/v1/projects/")
-             + FIREBASE_PROJECT_ID
-             + "/databases/(default)/documents/" + docPath;
-  http.begin(url);
-  http.addHeader("Authorization", String("Bearer ") + idToken);
-  http.addHeader("Content-Type", "application/json");
-  int code = http.PATCH(body);
-  if (code < 200 || code >= 300) {
-    Serial.printf("PATCH %s failed: %d\n%s\n",
-                  docPath.c_str(), code, http.getString().c_str());
-    http.end();
-    return false;
-  }
-  http.end();
-  return true;
-}
-
-void buildMapField(JsonObject parent, const char* key, JsonObject values) {
-  JsonObject mapVal = parent.createNestedObject(key)
-                            .createNestedObject("mapValue")
-                            .createNestedObject("fields");
-  for (JsonPair kv : values) {
-    mapVal[kv.key()]["doubleValue"] = kv.value().as<double>();
-  }
-}
-
-bool sendReading(JsonObject scalesObj, JsonObject tempsObj, float vbat) {
+  // 2) Reading-Dokument bauen
   uint64_t tsMs = (uint64_t)time(nullptr) * 1000ULL;
-  String docPath = String("users/") + OWNER_UID
-                 + "/devices/" + deviceId
-                 + "/readings/" + String((unsigned long long)tsMs);
+  DynamicJsonDocument out(8192);
+  JsonObject fields = out.createNestedObject("fields");
+  fb::writeInteger(fields, "ts",    (long long)tsMs);
+  fb::writeNumber (fields, "vBat",  vBat);
+  fb::writeInteger(fields, "boots", bootCount);
+  if (!isnan(ambientC)) fb::writeNumber(fields, "ambientC", ambientC);
 
-  DynamicJsonDocument doc(4096);
-  JsonObject fields = doc.createNestedObject("fields");
-  fields["ts"]["integerValue"]    = String((unsigned long long)tsMs);
-  fields["vBat"]["doubleValue"]   = vbat;
-  fields["boots"]["integerValue"] = String(bootCount);
-  buildMapField(fields, "scales", scalesObj);
-  buildMapField(fields, "temps",  tempsObj);
+  // scales: { s1: { raw, kg }, ... } als verschachtelte Map
+  JsonObject scalesFields = fields.createNestedObject("scales")
+                                  .createNestedObject("mapValue")
+                                  .createNestedObject("fields");
+  for (int i = 0; i < NUM_SCALES; i++) {
+    if (isnan(rawScales[i])) continue;
+    double kg = isnan(ambientC) ? NAN
+                                : cfg.computeKg(i, rawScales[i], ambientC);
+    JsonObject scaleEntry = scalesFields.createNestedObject(scaleId(i).c_str())
+                                        .createNestedObject("mapValue")
+                                        .createNestedObject("fields");
+    fb::writeNumber(scaleEntry, "raw", rawScales[i]);
+    if (!isnan(kg)) fb::writeNumber(scaleEntry, "kg", kg);
+  }
+
+  // temps: { addr: °C }
+  JsonObject tempsFields = fields.createNestedObject("temps")
+                                 .createNestedObject("mapValue")
+                                 .createNestedObject("fields");
+  for (JsonPair kv : tempsObj) {
+    tempsFields[kv.key().c_str()]["doubleValue"] = kv.value().as<double>();
+  }
 
   String body;
-  serializeJson(doc, body);
-  return firestorePatch(docPath, body);
-}
+  serializeJson(out, body);
 
-bool sendHeartbeat(float vbat) {
-  uint64_t tsMs = (uint64_t)time(nullptr) * 1000ULL;
   String docPath = String("users/") + OWNER_UID + "/devices/" + deviceId
-                 + "?updateMask.fieldPaths=lastSeen"
-                   "&updateMask.fieldPaths=deviceId"
-                   "&updateMask.fieldPaths=vBat"
-                   "&updateMask.fieldPaths=intervalSec";
+                 + "/readings/" + String((unsigned long long)tsMs);
+  if (!fb::patchDoc(idToken, docPath, body)) return false;
 
-  DynamicJsonDocument doc(512);
-  JsonObject fields = doc.createNestedObject("fields");
-  fields["lastSeen"]["integerValue"]    = String((unsigned long long)tsMs);
-  fields["deviceId"]["stringValue"]     = deviceId;
-  fields["vBat"]["doubleValue"]         = vbat;
-  fields["intervalSec"]["integerValue"] = String(intervalSec);
-
-  String body;
-  serializeJson(doc, body);
-  return firestorePatch(docPath, body);
+  // 3) Heartbeat
+  DynamicJsonDocument hb(512);
+  JsonObject hbf = hb.createNestedObject("fields");
+  fb::writeInteger(hbf, "lastSeen",    (long long)tsMs);
+  fb::writeString (hbf, "deviceId",    deviceId);
+  fb::writeNumber (hbf, "vBat",        vBat);
+  fb::writeInteger(hbf, "intervalSec", cfg.main.intervalSec);
+  String hbBody;
+  serializeJson(hb, hbBody);
+  fb::patchDoc(idToken, String("users/") + OWNER_UID + "/devices/" + deviceId,
+               hbBody, "lastSeen,deviceId,vBat,intervalSec");
+  return true;
 }
 
 // ============================================================================
-// Main
+// Setup / Loop
 // ============================================================================
 
 void setup() {
   Serial.begin(115200);
   delay(200);
-
   bootCount++;
   Serial.printf("\n=== Stockwaage Boot #%d ===\n", bootCount);
 
   bool forcePortal = shouldForcePortal();
-  if (forcePortal) Serial.println("BOOT-Taster gedrueckt -> Portal erzwingen");
+  if (forcePortal) Serial.println("BOOT-Taster -> Portal");
 
   loadPrefs();
 
   if (!ensureWiFi(forcePortal)) {
-    Serial.println("Kein WiFi - schlafen.");
-    enterDeepSleep(intervalSec);
+    Serial.println("WiFi failed -> sleep");
+    enterDeepSleep(bootIntervalSec);
   }
-
   syncTime();
-  initSensors();
+  sensors::init();
 
-  DynamicJsonDocument tmp(2048);
-  JsonObject scalesObj = tmp.createNestedObject("scales");
-  JsonObject tempsObj  = tmp.createNestedObject("temps");
-  readScalesInto(scalesObj);
-  readTempsInto(tempsObj);
-  float vbat = readVBat();
+  // Login einmal pro Wakeup
+  auto lr = fb::login(FIREBASE_EMAIL, firebasePassword);
+  if (!lr.ok) {
+    Serial.printf("Login failed: %s\n", lr.error.c_str());
+    enterDeepSleep(bootIntervalSec);
+  }
+  idToken = lr.idToken;
 
-  bool ok = false;
-  if (firebaseLogin()) {
-    bool a = sendReading(scalesObj, tempsObj, vbat);
-    bool b = sendHeartbeat(vbat);
-    ok = a && b;
+  // Config + Commands. Portal-Wert dient als Default, falls Firestore leer.
+  cfg.main.intervalSec = bootIntervalSec;
+  cfg.load(idToken, deviceId);
+  commands::processPending(idToken, deviceId, cfg);
+  // commands haben evtl. die Config geaendert (tare/cal) -> erneut laden
+  cfg.load(idToken, deviceId);
+
+  bool ok = measureAndUpload();
+  if (ok) { failureStreak = 0; Serial.println("Upload OK"); }
+  else    { failureStreak++;   Serial.println("Upload FAIL"); }
+
+  // Stay-Awake: ESP bleibt wach und pollt commands, solange stayAwakeUntilMs
+  // in der Zukunft liegt.
+  uint64_t nowMs = (uint64_t)time(nullptr) * 1000ULL;
+  while (cfg.main.stayAwakeUntilMs > nowMs) {
+    Serial.printf("StayAwake noch %llu s\n",
+                  (cfg.main.stayAwakeUntilMs - nowMs) / 1000ULL);
+    delay(3000);
+    commands::processPending(idToken, deviceId, cfg);
+    cfg.load(idToken, deviceId);
+    nowMs = (uint64_t)time(nullptr) * 1000ULL;
   }
 
-  if (ok) {
-    lastFailures = 0;
-    Serial.println("Upload OK.");
-  } else {
-    lastFailures++;
-    Serial.printf("Upload FAIL (#%u in Folge)\n", lastFailures);
-  }
-
-  enterDeepSleep(intervalSec);
+  enterDeepSleep(cfg.main.intervalSec);
 }
 
 void loop() {
-  // never reached; setup() endet im Deep Sleep
+  // never reached
 }

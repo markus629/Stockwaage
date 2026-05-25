@@ -1,0 +1,87 @@
+#include "runtime_config.h"
+#include "firebase.h"
+#include <ArduinoJson.h>
+#include <math.h>
+
+String scaleId(int idx) {
+  return String("s") + String(idx + 1);
+}
+
+static String mainDocPath(const String& deviceId) {
+  return String("users/") + OWNER_UID + "/devices/" + deviceId + "/config/main";
+}
+static String scaleDocPath(const String& deviceId, int idx) {
+  return String("users/") + OWNER_UID + "/devices/" + deviceId
+       + "/scales/" + scaleId(idx);
+}
+
+bool RuntimeConfig::load(const String& idToken, const String& deviceId) {
+  // --- main ---
+  String resp;
+  if (fb::getDoc(idToken, mainDocPath(deviceId), resp) && resp.length() > 0) {
+    DynamicJsonDocument doc(2048);
+    if (!deserializeJson(doc, resp)) {
+      JsonObject fields = doc["fields"];
+      main.intervalSec     = (uint32_t)fb::readInteger(fields["intervalSec"],
+                                                      main.intervalSec);
+      main.ambientTempAddr = fb::readString(fields["ambientTempAddr"],
+                                            main.ambientTempAddr);
+      main.stayAwakeUntilMs = (uint64_t)fb::readInteger(
+                                  fields["stayAwakeUntilMs"], 0);
+    }
+  }
+
+  // --- scales: ein GET pro scaleId (einfacher als Collection-Listing) ---
+  for (int i = 0; i < NUM_SCALES; i++) {
+    String resp2;
+    if (!fb::getDoc(idToken, scaleDocPath(deviceId, i), resp2)) continue;
+    if (resp2.length() == 0) continue;
+    DynamicJsonDocument doc(1024);
+    if (deserializeJson(doc, resp2)) continue;
+    JsonObject f = doc["fields"];
+    scales[i].enabled     = fb::readBool   (f["enabled"], false);
+    scales[i].name        = fb::readString (f["name"], "");
+    scales[i].offset      = fb::readNumber (f["offset"], 0.0);
+    scales[i].scaleFactor = fb::readNumber (f["scaleFactor"], 0.0);
+    scales[i].tempCoef    = fb::readNumber (f["tempCoef"], 0.0);
+    scales[i].tempRefC    = fb::readNumber (f["tempRefC"], 20.0);
+  }
+
+  return true;
+}
+
+bool RuntimeConfig::saveScale(const String& idToken, const String& deviceId,
+                              int idx) const {
+  const auto& s = scales[idx];
+  DynamicJsonDocument doc(1024);
+  JsonObject fields = doc.createNestedObject("fields");
+  fb::writeBool   (fields, "enabled",     s.enabled);
+  fb::writeString (fields, "name",        s.name);
+  fb::writeNumber (fields, "offset",      s.offset);
+  fb::writeNumber (fields, "scaleFactor", s.scaleFactor);
+  fb::writeNumber (fields, "tempCoef",    s.tempCoef);
+  fb::writeNumber (fields, "tempRefC",    s.tempRefC);
+  String body;
+  serializeJson(doc, body);
+  return fb::patchDoc(idToken, scaleDocPath(deviceId, idx), body);
+}
+
+bool RuntimeConfig::saveMain(const String& idToken,
+                             const String& deviceId) const {
+  DynamicJsonDocument doc(512);
+  JsonObject fields = doc.createNestedObject("fields");
+  fb::writeInteger(fields, "intervalSec",      main.intervalSec);
+  fb::writeString (fields, "ambientTempAddr",  main.ambientTempAddr);
+  fb::writeInteger(fields, "stayAwakeUntilMs", main.stayAwakeUntilMs);
+  String body;
+  serializeJson(doc, body);
+  return fb::patchDoc(idToken, mainDocPath(deviceId), body,
+                      "intervalSec,ambientTempAddr,stayAwakeUntilMs");
+}
+
+double RuntimeConfig::computeKg(int idx, double raw, double tempC) const {
+  const auto& s = scales[idx];
+  if (s.scaleFactor == 0.0) return NAN;
+  double corrected = raw - s.offset - s.tempCoef * (tempC - s.tempRefC);
+  return corrected / s.scaleFactor;
+}
