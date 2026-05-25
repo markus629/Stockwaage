@@ -2,6 +2,10 @@
 node_modules/
 .next/
 web/out/
+
+# Arduino build outputs
+firmware/**/build/
+*.bin
 *.log
 npm-debug.log*
 *.tsbuildinfo
