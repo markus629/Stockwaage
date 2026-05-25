@@ -8,6 +8,7 @@ import {
   onSnapshot,
   orderBy,
   query,
+  where,
 } from "firebase/firestore";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
@@ -26,6 +27,11 @@ import {
 } from "@/lib/devices";
 import CalibrationWizard from "@/components/CalibrationWizard";
 import LearningPhase from "@/components/LearningPhase";
+import ScaleChart from "@/components/ScaleChart";
+
+const DAYS_DEFAULT = 7;
+const DAYS_MIN = 1;
+const DAYS_MAX = 30;
 
 export default function Page() {
   return (
@@ -43,7 +49,9 @@ function DeviceDetail() {
   const [mainCfg, setMainCfg] = useState<MainConfig>({});
   const [scales, setScales] = useState<Record<string, ScaleConfig>>({});
   const [latest, setLatest] = useState<Reading | null>(null);
+  const [windowReadings, setWindowReadings] = useState<Reading[]>([]);
   const [wizardFor, setWizardFor] = useState<string | null>(null);
+  const [days, setDays] = useState<number>(DAYS_DEFAULT);
 
   useEffect(() => onAuthStateChanged(auth, setUser), []);
 
@@ -77,6 +85,24 @@ function DeviceDetail() {
     );
     return () => unsubs.forEach((u) => u());
   }, [user, deviceId]);
+
+  useEffect(() => {
+    if (!user || user === "loading" || !deviceId) return;
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const cutoff = start.getTime() - (days - 1) * 24 * 3600 * 1000;
+    const unsub = onSnapshot(
+      query(
+        readingsCol(deviceId),
+        where("ts", ">=", cutoff),
+        orderBy("ts", "asc"),
+      ),
+      (snap) => {
+        setWindowReadings(snap.docs.map((d) => d.data() as Reading));
+      },
+    );
+    return () => unsub();
+  }, [user, deviceId, days]);
 
   const tempAddrs = useMemo(
     () => (latest?.temps ? Object.keys(latest.temps) : []),
@@ -177,6 +203,25 @@ function DeviceDetail() {
               Wirkt ab nächstem ESP-Wakeup.
             </span>
           </label>
+
+          <label className="text-sm">
+            Verlauf: Anzahl Tage ({DAYS_MIN}–{DAYS_MAX})
+            <input
+              type="number"
+              min={DAYS_MIN}
+              max={DAYS_MAX}
+              value={days}
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10);
+                if (!isNaN(v))
+                  setDays(Math.max(DAYS_MIN, Math.min(DAYS_MAX, v)));
+              }}
+              className="mt-1 w-full rounded border border-neutral-300 px-2 py-1"
+            />
+            <span className="mt-1 block text-xs text-neutral-500">
+              Heute = rot/dick, älteste = blau/dünn.
+            </span>
+          </label>
         </div>
         {latest?.ambientC !== undefined && (
           <p className="mt-3 text-xs text-neutral-600">
@@ -259,6 +304,8 @@ function DeviceDetail() {
                   </div>
                   <LearningPhase deviceId={deviceId} scale={cfg} />
                 </div>
+
+                <ScaleChart scaleId={sid} readings={windowReadings} />
               </li>
             );
           })}
