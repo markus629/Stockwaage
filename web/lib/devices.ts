@@ -93,12 +93,15 @@ export async function sendCommand(
   deviceId: string,
   cmd: Omit<Command, "id" | "status" | "createdAt">,
 ): Promise<string> {
-  const ref = await addDoc(commandsCol(deviceId), {
-    ...cmd,
+  const data: Record<string, unknown> = {
     status: "pending",
     createdAt: Date.now(),
     createdAtServer: serverTimestamp(),
-  });
+  };
+  for (const [k, v] of Object.entries(cmd)) {
+    if (v !== undefined) data[k] = v;
+  }
+  const ref = await addDoc(commandsCol(deviceId), data);
   return ref.id;
 }
 
