@@ -1,0 +1,39 @@
+# Node
+node_modules/
+.next/
+out/
+*.log
+npm-debug.log*
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# Firebase
+.firebase/
+*-debug.log
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Secrets - NEVER commit
+.env
+.env.local
+.env*.local
+serviceAccountKey.json
+*serviceAccount*.json
+pi/config.local.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp

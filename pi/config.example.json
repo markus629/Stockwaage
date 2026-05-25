@@ -1,0 +1,16 @@
+{
+  "firebase": {
+    "apiKey": "DEIN_FIREBASE_WEB_API_KEY",
+    "authDomain": "stockwaage.firebaseapp.com",
+    "projectId": "stockwaage",
+    "databaseURL": "https://stockwaage.firebaseio.com",
+    "storageBucket": "stockwaage.appspot.com"
+  },
+  "auth": {
+    "email": "pi@stockwaage.local",
+    "password": "DEIN_PI_PASSWORT"
+  },
+  "deviceId": "pi-01",
+  "ownerUid": "OWNER_UID_HIER_EINTRAGEN",
+  "intervalSec": 60
+}

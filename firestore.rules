@@ -1,0 +1,34 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Allowlist beider Accounts (Markus + Pi). Beide schreiben in den
+    // gleichen Bucket users/{OWNER_UID}/. UIDs nach dem ersten Login in
+    // Firebase Console > Authentication ablesen und unten eintragen.
+    //
+    // OWNER_UID: Markus' UID (Daten gehören ihm)
+    // Pi-Accounts: dürfen lesen + schreiben, aber kein Owner-Wechsel.
+
+    function ownerUid() {
+      return 'OWNER_UID_HIER_EINTRAGEN';
+    }
+
+    function isAllowed() {
+      return request.auth != null && request.auth.uid in [
+        ownerUid()
+        // , 'PI_UID_1'
+        // , 'PI_UID_2'
+      ];
+    }
+
+    match /users/{uid}/{document=**} {
+      allow read, write: if isAllowed() && uid == ownerUid();
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

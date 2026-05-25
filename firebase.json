@@ -1,0 +1,13 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "hosting": {
+    "source": "web",
+    "frameworksBackend": {
+      "region": "europe-west3"
+    },
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+  }
+}
