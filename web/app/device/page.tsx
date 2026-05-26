@@ -20,7 +20,6 @@ import {
   readingsCol,
   removeScale,
   scalesCol,
-  updateMainConfig,
   type Device,
   type MainConfig,
   type Reading,
@@ -28,17 +27,40 @@ import {
 } from "@/lib/devices";
 import CalibrationWizard from "@/components/CalibrationWizard";
 import ScaleCard from "@/components/ScaleCard";
-import { useScaleUiPrefs } from "@/lib/uiPrefs";
+import SettingsPanel from "@/components/SettingsPanel";
+import { useDeviceTab, useScaleUiPrefs } from "@/lib/uiPrefs";
 
 const DAYS_DEFAULT = 7;
-const DAYS_MIN = 1;
-const DAYS_MAX = 30;
 
 export default function Page() {
   return (
     <Suspense fallback={<div className="p-6">Laden…</div>}>
       <DeviceDetail />
     </Suspense>
+  );
+}
+
+function TopTab({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${
+        active
+          ? "border-neutral-900 text-neutral-900"
+          : "border-transparent text-neutral-500 hover:text-neutral-900"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -54,6 +76,7 @@ function DeviceDetail() {
   const [wizardFor, setWizardFor] = useState<string | null>(null);
   const [days, setDays] = useState<number>(DAYS_DEFAULT);
   const uiPrefs = useScaleUiPrefs(deviceId);
+  const [tab, setTab] = useDeviceTab(deviceId);
 
   useEffect(() => onAuthStateChanged(auth, setUser), []);
 
@@ -166,111 +189,72 @@ function DeviceDetail() {
         </div>
       </header>
 
-      <section className="mb-6 rounded-lg border border-neutral-200 bg-white p-4">
-        <h2 className="mb-2 text-sm font-medium uppercase tracking-wide text-neutral-500">
-          Geräte-Einstellungen
-        </h2>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="text-sm">
-            Mess-Intervall (Sekunden)
-            <input
-              type="number"
-              min={30}
-              step={30}
-              value={mainCfg.intervalSec ?? device?.intervalSec ?? ""}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10);
-                if (!isNaN(v) && v >= 30) {
-                  updateMainConfig(deviceId, { intervalSec: v });
-                }
-              }}
-              className="mt-1 w-full rounded border border-neutral-300 px-2 py-1"
-            />
-            <span className="mt-1 block text-xs text-neutral-500">
-              Wirkt ab nächstem ESP-Wakeup.
-            </span>
-          </label>
-
-          <label className="text-sm">
-            Verlauf: Anzahl Tage ({DAYS_MIN}–{DAYS_MAX})
-            <input
-              type="number"
-              min={DAYS_MIN}
-              max={DAYS_MAX}
-              value={days}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10);
-                if (!isNaN(v))
-                  setDays(Math.max(DAYS_MIN, Math.min(DAYS_MAX, v)));
-              }}
-              className="mt-1 w-full rounded border border-neutral-300 px-2 py-1"
-            />
-            <span className="mt-1 block text-xs text-neutral-500">
-              Heute = rot/dick, älteste = blau/dünn.
-            </span>
-          </label>
-        </div>
-        {(latest?.ambientC !== undefined ||
-          latest?.ambientHumidity !== undefined) && (
-          <p className="mt-3 text-xs text-neutral-600">
-            Aktuell:{" "}
-            {latest?.ambientC !== undefined && (
-              <span className="font-mono">
-                {latest.ambientC.toFixed(1)} °C
-              </span>
-            )}
-            {latest?.ambientC !== undefined &&
-              latest?.ambientHumidity !== undefined &&
-              " · "}
-            {latest?.ambientHumidity !== undefined && (
-              <span className="font-mono">
-                {latest.ambientHumidity.toFixed(0)} % rF
-              </span>
-            )}
-          </p>
-        )}
-      </section>
-
-      <section>
-        <h2 className="mb-2 text-sm font-medium uppercase tracking-wide text-neutral-500">
+      <nav className="mb-4 flex border-b border-neutral-200">
+        <TopTab active={tab === "scales"} onClick={() => setTab("scales")}>
           Waagen
-        </h2>
-        <ul className="grid gap-3">
-          {scaleIds.map((sid) => (
-            <ScaleCard
-              key={sid}
-              deviceId={deviceId}
-              scaleId={sid}
-              cfg={scales[sid] ?? { id: sid }}
-              reading={latest?.scales?.[sid]}
-              readings={windowReadings}
-              prefs={uiPrefs.get(sid)}
-              pinOwners={pinOwners}
-              onPrefsChange={(patch) => uiPrefs.set(sid, patch)}
-              onCalibrate={() => setWizardFor(sid)}
-              onDelete={() => removeScale(deviceId, sid)}
-            />
-          ))}
-        </ul>
-        {scaleIds.length === 0 && (
-          <p className="mb-3 rounded border border-dashed border-neutral-300 bg-white p-4 text-center text-sm text-neutral-500">
-            Noch keine Waage konfiguriert. Mit „+ Waage hinzufügen“ legst du
-            eine an. Der ESP übernimmt die Pin-Belegung beim nächsten Wakeup.
-          </p>
-        )}
-        {scaleIds.length < MAX_SCALES && (
-          <button
-            type="button"
-            onClick={() => addScale(deviceId, scaleIds, pinOwners)}
-            className="mt-3 w-full rounded-lg border border-dashed border-neutral-300 bg-white px-3 py-3 text-sm font-medium text-neutral-600 hover:border-neutral-500 hover:bg-neutral-50"
-          >
-            + Waage hinzufügen{" "}
-            <span className="text-xs font-normal text-neutral-400">
-              ({scaleIds.length}/{MAX_SCALES})
-            </span>
-          </button>
-        )}
-      </section>
+          <span className="ml-1.5 text-xs text-neutral-400">
+            ({scaleIds.length})
+          </span>
+        </TopTab>
+        <TopTab
+          active={tab === "settings"}
+          onClick={() => setTab("settings")}
+        >
+          Einstellungen
+        </TopTab>
+      </nav>
+
+      {tab === "scales" && (
+        <section>
+          <ul className="grid gap-3">
+            {scaleIds.map((sid) => (
+              <ScaleCard
+                key={sid}
+                deviceId={deviceId}
+                scaleId={sid}
+                cfg={scales[sid] ?? { id: sid }}
+                reading={latest?.scales?.[sid]}
+                readings={windowReadings}
+                prefs={uiPrefs.get(sid)}
+                pinOwners={pinOwners}
+                onPrefsChange={(patch) => uiPrefs.set(sid, patch)}
+                onCalibrate={() => setWizardFor(sid)}
+                onDelete={() => removeScale(deviceId, sid)}
+              />
+            ))}
+          </ul>
+          {scaleIds.length === 0 && (
+            <p className="mb-3 rounded border border-dashed border-neutral-300 bg-white p-4 text-center text-sm text-neutral-500">
+              Noch keine Waage konfiguriert. Mit „+ Waage hinzufügen“ legst
+              du eine an. Der ESP übernimmt die Pin-Belegung beim nächsten
+              Wakeup.
+            </p>
+          )}
+          {scaleIds.length < MAX_SCALES && (
+            <button
+              type="button"
+              onClick={() => addScale(deviceId, scaleIds, pinOwners)}
+              className="mt-3 w-full rounded-lg border border-dashed border-neutral-300 bg-white px-3 py-3 text-sm font-medium text-neutral-600 hover:border-neutral-500 hover:bg-neutral-50"
+            >
+              + Waage hinzufügen{" "}
+              <span className="text-xs font-normal text-neutral-400">
+                ({scaleIds.length}/{MAX_SCALES})
+              </span>
+            </button>
+          )}
+        </section>
+      )}
+
+      {tab === "settings" && (
+        <SettingsPanel
+          deviceId={deviceId}
+          mainCfg={mainCfg}
+          latest={latest}
+          intervalSecFallback={device?.intervalSec}
+          days={days}
+          onDaysChange={setDays}
+        />
+      )}
 
       {wizardFor && (
         <CalibrationWizard

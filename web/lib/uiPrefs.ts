@@ -2,6 +2,35 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+export type DeviceTab = "scales" | "settings";
+
+const DEVICE_TAB_KEY_PREFIX = "stockwaage.tab.";
+
+export function useDeviceTab(
+  deviceId: string,
+): [DeviceTab, (t: DeviceTab) => void] {
+  const [tab, setTab] = useState<DeviceTab>("scales");
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    if (!deviceId || typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(DEVICE_TAB_KEY_PREFIX + deviceId);
+      if (raw === "scales" || raw === "settings") setTab(raw);
+    } catch {}
+    setHydrated(true);
+  }, [deviceId]);
+
+  useEffect(() => {
+    if (!hydrated || !deviceId || typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(DEVICE_TAB_KEY_PREFIX + deviceId, tab);
+    } catch {}
+  }, [hydrated, deviceId, tab]);
+
+  return [tab, setTab];
+}
+
 export type ConfigTab = "calib" | "temp" | "pin";
 
 export type ScaleUiPrefs = {

@@ -23,7 +23,35 @@ export type Device = {
 export type MainConfig = {
   intervalSec?: number;
   stayAwakeUntilMs?: number;
+  // I2C-Bus (geteilt von BME280 + INA219)
+  i2cSda?: number;
+  i2cScl?: number;
+  // BME280 (Temp/Feuchte/Druck)
+  bme280Enabled?: boolean;
+  bme280Addr?: number;
+  // INA219 fuer Akku-Strom/Spannung
+  inaBatteryEnabled?: boolean;
+  inaBatteryAddr?: number;
+  // INA219 fuer Solar-Strom/Spannung
+  inaSolarEnabled?: boolean;
+  inaSolarAddr?: number;
+  // Regensensor (analog)
+  rainEnabled?: boolean;
+  rainPin?: number;
 };
+
+export const DEFAULT_I2C_SDA = 21;
+export const DEFAULT_I2C_SCL = 22;
+export const ALLOWED_I2C_PINS = [
+  5, 13, 14, 15, 16, 17, 18, 19, 21, 22, 25, 26, 27, 33,
+] as const;
+export const BME280_ADDRS = [0x76, 0x77] as const;
+export const INA219_ADDRS = [0x40, 0x41, 0x44, 0x45] as const;
+export const ALLOWED_RAIN_PINS = [33, 34, 35, 36, 39] as const;
+export const DEFAULT_RAIN_PIN = 33;
+export const DEFAULT_BME280_ADDR = 0x76;
+export const DEFAULT_INA_BATTERY_ADDR = 0x40;
+export const DEFAULT_INA_SOLAR_ADDR = 0x41;
 
 export type ScaleConfig = {
   id: string; // "s1".."s8"
@@ -45,6 +73,12 @@ export type Reading = {
   boots?: number;
   ambientC?: number;
   ambientHumidity?: number;
+  ambientPressure?: number;
+  batteryV?: number;
+  batteryA?: number;
+  solarV?: number;
+  solarA?: number;
+  rainRaw?: number;
   scales: Record<string, ScaleReading>;
 };
 
