@@ -22,7 +22,6 @@ export type Device = {
 
 export type MainConfig = {
   intervalSec?: number;
-  ambientTempAddr?: string;
   stayAwakeUntilMs?: number;
 };
 
@@ -45,8 +44,8 @@ export type Reading = {
   vBat?: number;
   boots?: number;
   ambientC?: number;
+  ambientHumidity?: number;
   scales: Record<string, ScaleReading>;
-  temps: Record<string, number>;
 };
 
 export type CommandStatus = "pending" | "done" | "error";

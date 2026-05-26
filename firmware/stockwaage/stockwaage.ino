@@ -115,30 +115,20 @@ bool measureAndUpload() {
   double rawScales[NUM_SCALES];
   sensors::readScalesRaw(rawScales);
 
-  DynamicJsonDocument tempDoc(2048);
-  JsonObject tempsObj = tempDoc.to<JsonObject>();
-  sensors::readTemps(tempsObj);
-  float vBat = sensors::readVBat();
+  double ambientC = NAN, ambientHumidity = NAN;
+  sensors::readEnvironment(ambientC, ambientHumidity);
 
-  // Aussentemperatur aus konfigurierter Sensor-Adresse, sonst Durchschnitt
-  double ambientC = NAN;
-  if (cfg.main.ambientTempAddr.length() > 0 &&
-      tempsObj.containsKey(cfg.main.ambientTempAddr.c_str())) {
-    ambientC = tempsObj[cfg.main.ambientTempAddr.c_str()].as<double>();
-  } else if (!tempsObj.isNull()) {
-    double sum = 0; int n = 0;
-    for (JsonPair kv : tempsObj) { sum += kv.value().as<double>(); n++; }
-    if (n > 0) ambientC = sum / n;
-  }
+  float vBat = sensors::readVBat();
 
   // 2) Reading-Dokument bauen
   uint64_t tsMs = (uint64_t)time(nullptr) * 1000ULL;
-  DynamicJsonDocument out(8192);
+  DynamicJsonDocument out(4096);
   JsonObject fields = out.createNestedObject("fields");
   fb::writeInteger(fields, "ts",    (long long)tsMs);
   fb::writeNumber (fields, "vBat",  vBat);
   fb::writeInteger(fields, "boots", bootCount);
-  if (!isnan(ambientC)) fb::writeNumber(fields, "ambientC", ambientC);
+  if (!isnan(ambientC))        fb::writeNumber(fields, "ambientC",        ambientC);
+  if (!isnan(ambientHumidity)) fb::writeNumber(fields, "ambientHumidity", ambientHumidity);
 
   // scales: { s1: { raw, kg }, ... } als verschachtelte Map
   JsonObject scalesFields = fields.createNestedObject("scales")
@@ -153,14 +143,6 @@ bool measureAndUpload() {
                                         .createNestedObject("fields");
     fb::writeNumber(scaleEntry, "raw", rawScales[i]);
     if (!isnan(kg)) fb::writeNumber(scaleEntry, "kg", kg);
-  }
-
-  // temps: { addr: °C }
-  JsonObject tempsFields = fields.createNestedObject("temps")
-                                 .createNestedObject("mapValue")
-                                 .createNestedObject("fields");
-  for (JsonPair kv : tempsObj) {
-    tempsFields[kv.key().c_str()]["doubleValue"] = kv.value().as<double>();
   }
 
   String body;

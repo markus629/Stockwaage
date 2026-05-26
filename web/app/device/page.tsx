@@ -106,11 +106,6 @@ function DeviceDetail() {
     return () => unsub();
   }, [user, deviceId, days]);
 
-  const tempAddrs = useMemo(
-    () => (latest?.temps ? Object.keys(latest.temps) : []),
-    [latest],
-  );
-
   const scaleIds = useMemo(
     () => Object.keys(scales).sort((a, b) => a.localeCompare(b)),
     [scales],
@@ -177,32 +172,6 @@ function DeviceDetail() {
         </h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-sm">
-            Außensensor (für Temp-Kompensation)
-            <select
-              value={mainCfg.ambientTempAddr ?? ""}
-              onChange={(e) =>
-                updateMainConfig(deviceId, {
-                  ambientTempAddr: e.target.value || undefined,
-                })
-              }
-              className="mt-1 w-full rounded border border-neutral-300 px-2 py-1"
-            >
-              <option value="">(automatischer Mittelwert)</option>
-              {tempAddrs.map((a) => (
-                <option key={a} value={a}>
-                  {a} ({latest?.temps[a]?.toFixed(1)} °C)
-                </option>
-              ))}
-            </select>
-            {tempAddrs.length === 0 && (
-              <p className="mt-1 text-xs text-neutral-500">
-                Keine DS18B20 in letzter Messung. Sobald der ESP welche
-                meldet, erscheinen sie hier.
-              </p>
-            )}
-          </label>
-
-          <label className="text-sm">
             Mess-Intervall (Sekunden)
             <input
               type="number"
@@ -241,10 +210,23 @@ function DeviceDetail() {
             </span>
           </label>
         </div>
-        {latest?.ambientC !== undefined && (
+        {(latest?.ambientC !== undefined ||
+          latest?.ambientHumidity !== undefined) && (
           <p className="mt-3 text-xs text-neutral-600">
-            Aktuelle Außentemperatur:{" "}
-            <span className="font-mono">{latest.ambientC.toFixed(2)} °C</span>
+            Aktuell:{" "}
+            {latest?.ambientC !== undefined && (
+              <span className="font-mono">
+                {latest.ambientC.toFixed(1)} °C
+              </span>
+            )}
+            {latest?.ambientC !== undefined &&
+              latest?.ambientHumidity !== undefined &&
+              " · "}
+            {latest?.ambientHumidity !== undefined && (
+              <span className="font-mono">
+                {latest.ambientHumidity.toFixed(0)} % rF
+              </span>
+            )}
           </p>
         )}
       </section>

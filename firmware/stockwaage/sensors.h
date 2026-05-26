@@ -1,11 +1,10 @@
 #pragma once
 #include <Arduino.h>
-#include <ArduinoJson.h>
 #include "config.h"
 
 namespace sensors {
 
-// Peripherie ohne Waagen-Pins (OneWire, ADC). Muss einmal beim Boot laufen.
+// Peripherie ohne Waagen-Pins (DHT, ADC). Muss einmal beim Boot laufen.
 void init();
 
 // HX711-Instanzen mit den Pins aus der Runtime-Config initialisieren.
@@ -21,8 +20,8 @@ void readScalesRaw(double rawOut[NUM_SCALES]);
 // Liefert NAN bei Timeout oder wenn Waage nicht aktiv ist.
 double readScaleRawAvg(int scaleIdx, int samples);
 
-// liest DS18B20 in eine Map (addr -> tempC). addr-Format: "28-aabbccddeeff".
-void readTemps(JsonObject mapOut);
+// AM2302/DHT22 lesen. Beide Werte NAN bei Fehler / Sensor nicht angeschlossen.
+void readEnvironment(double& tempC, double& humidity);
 
 // Akku-Spannung in Volt.
 float readVBat();

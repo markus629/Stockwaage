@@ -18,7 +18,6 @@ struct ScaleConfig {
 
 struct MainConfig {
   uint32_t intervalSec      = DEFAULT_INTERVAL_SEC;
-  String   ambientTempAddr;            // DS18B20-Adresse fuer Aussentemperatur
   uint64_t stayAwakeUntilMs = 0;       // ESP bleibt wach bis hier
 };
 

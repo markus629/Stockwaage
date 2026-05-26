@@ -22,10 +22,8 @@ bool RuntimeConfig::load(const String& idToken, const String& deviceId) {
     DynamicJsonDocument doc(2048);
     if (!deserializeJson(doc, resp)) {
       JsonObject fields = doc["fields"];
-      main.intervalSec     = (uint32_t)fb::readInteger(fields["intervalSec"],
-                                                      main.intervalSec);
-      main.ambientTempAddr = fb::readString(fields["ambientTempAddr"],
-                                            main.ambientTempAddr);
+      main.intervalSec      = (uint32_t)fb::readInteger(fields["intervalSec"],
+                                                       main.intervalSec);
       main.stayAwakeUntilMs = (uint64_t)fb::readInteger(
                                   fields["stayAwakeUntilMs"], 0);
     }
@@ -77,12 +75,11 @@ bool RuntimeConfig::saveMain(const String& idToken,
   DynamicJsonDocument doc(512);
   JsonObject fields = doc.createNestedObject("fields");
   fb::writeInteger(fields, "intervalSec",      main.intervalSec);
-  fb::writeString (fields, "ambientTempAddr",  main.ambientTempAddr);
   fb::writeInteger(fields, "stayAwakeUntilMs", main.stayAwakeUntilMs);
   String body;
   serializeJson(doc, body);
   return fb::patchDoc(idToken, mainDocPath(deviceId), body,
-                      "intervalSec,ambientTempAddr,stayAwakeUntilMs");
+                      "intervalSec,stayAwakeUntilMs");
 }
 
 double RuntimeConfig::computeKg(int idx, double raw, double tempC) const {

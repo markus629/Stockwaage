@@ -1,35 +1,25 @@
 #include "sensors.h"
 #include <HX711.h>
-#include <OneWire.h>
-#include <DallasTemperature.h>
+#include <DHT.h>
 #include <math.h>
 
 namespace {
 HX711 hx[NUM_SCALES];
 bool  hxActive[NUM_SCALES] = {false};
-OneWire oneWire(PIN_ONEWIRE);
-DallasTemperature ds(&oneWire);
-
-String addrToHex(const uint8_t* a) {
-  char buf[24];
-  snprintf(buf, sizeof(buf), "%02x-%02x%02x%02x%02x%02x%02x%02x",
-           a[0], a[1], a[2], a[3], a[4], a[5], a[6]);
-  return String(buf);
-}
+DHT   dht(PIN_DHT, DHT_TYPE);
 } // namespace
 
 namespace sensors {
 
 void init() {
-  ds.begin();
-  ds.setWaitForConversion(true);
+  dht.begin();
   analogReadResolution(12);
 }
 
 void initScales(const int dtPins[NUM_SCALES]) {
   bool pinUsed[40] = {false};
   pinUsed[PIN_HX711_SCK] = true;          // SCK ist gemeinsam
-  pinUsed[PIN_ONEWIRE]   = true;
+  pinUsed[PIN_DHT]       = true;
   pinUsed[PIN_VBAT_ADC]  = true;
   pinUsed[PIN_PORTAL_FORCE] = true;
 
@@ -65,16 +55,21 @@ double readScaleRawAvg(int idx, int samples) {
   return (double)hx[idx].read_average(samples);
 }
 
-void readTemps(JsonObject mapOut) {
-  ds.requestTemperatures();
-  int n = ds.getDeviceCount();
-  for (int i = 0; i < n; i++) {
-    DeviceAddress a;
-    if (!ds.getAddress(a, i)) continue;
-    float t = ds.getTempC(a);
-    if (t == DEVICE_DISCONNECTED_C) continue;
-    mapOut[addrToHex(a).c_str()] = t;
+void readEnvironment(double& tempC, double& humidity) {
+  // DHT22 braucht ~2s zwischen Reads. Bei Cold-Boot direkt nach init()
+  // ist der erste Read oft NAN, daher zweimal versuchen.
+  for (int attempt = 0; attempt < 2; attempt++) {
+    float t = dht.readTemperature();
+    float h = dht.readHumidity();
+    if (!isnan(t) && !isnan(h)) {
+      tempC = (double)t;
+      humidity = (double)h;
+      return;
+    }
+    delay(2100);
   }
+  tempC = NAN;
+  humidity = NAN;
 }
 
 float readVBat() {

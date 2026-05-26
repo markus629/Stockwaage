@@ -21,8 +21,9 @@ static const int PIN_HX711_DT[NUM_SCALES] = {
   13, 14, 16, 17, 18, 19, 21, 22
 };
 
-// DS18B20 OneWire-Bus (mehrere Sensoren am gleichen Pin moeglich)
-#define PIN_ONEWIRE         23
+// DHT22/AM2302 fuer Temperatur + Feuchtigkeit (1 Sensor pro Pin)
+#define PIN_DHT             23
+#define DHT_TYPE            DHT22
 
 // Akku-Spannung messen (Spannungsteiler 100k/100k empfohlen)
 #define PIN_VBAT_ADC        32
