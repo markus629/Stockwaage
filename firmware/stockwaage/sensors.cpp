@@ -1,25 +1,36 @@
 #include "sensors.h"
+#include "runtime_config.h"
 #include <HX711.h>
-#include <DHT.h>
+#include <Wire.h>
+#include <Adafruit_BME280.h>
+#include <Adafruit_INA219.h>
 #include <math.h>
 
 namespace {
 HX711 hx[NUM_SCALES];
 bool  hxActive[NUM_SCALES] = {false};
-DHT   dht(PIN_DHT, DHT_TYPE);
+
+Adafruit_BME280 bme;
+bool bmeReady = false;
+
+Adafruit_INA219* inaBat = nullptr;
+Adafruit_INA219* inaSol = nullptr;
+bool inaBatReady = false;
+bool inaSolReady = false;
+
+int  envRainPin  = -1;
+bool i2cStarted  = false;
 } // namespace
 
 namespace sensors {
 
 void init() {
-  dht.begin();
   analogReadResolution(12);
 }
 
 void initScales(const int dtPins[NUM_SCALES]) {
   bool pinUsed[40] = {false};
-  pinUsed[PIN_HX711_SCK] = true;          // SCK ist gemeinsam
-  pinUsed[PIN_DHT]       = true;
+  pinUsed[PIN_HX711_SCK] = true;
   pinUsed[PIN_VBAT_ADC]  = true;
   pinUsed[PIN_PORTAL_FORCE] = true;
 
@@ -35,13 +46,57 @@ void initScales(const int dtPins[NUM_SCALES]) {
   }
 }
 
+void initEnv(const MainConfig& cfg) {
+  const bool needI2C = cfg.bme280Enabled || cfg.inaBatteryEnabled ||
+                       cfg.inaSolarEnabled;
+  if (needI2C && !i2cStarted) {
+    Wire.begin(cfg.i2cSda, cfg.i2cScl);
+    Wire.setClock(100000);  // konservativ fuer lange Kabel
+    i2cStarted = true;
+  }
+
+  if (cfg.bme280Enabled) {
+    bmeReady = bme.begin((uint8_t)cfg.bme280Addr, &Wire);
+    if (!bmeReady) {
+      Serial.printf("[bme280] init failed at 0x%02X\n", cfg.bme280Addr);
+    } else {
+      // Niedriges Oversampling = schnell, kein Selbstwaerme-Drift bei
+      // forced mode.
+      bme.setSampling(Adafruit_BME280::MODE_FORCED,
+                      Adafruit_BME280::SAMPLING_X1,    // temp
+                      Adafruit_BME280::SAMPLING_X1,    // pressure
+                      Adafruit_BME280::SAMPLING_X1,    // humidity
+                      Adafruit_BME280::FILTER_OFF);
+    }
+  }
+
+  if (cfg.inaBatteryEnabled) {
+    inaBat = new Adafruit_INA219((uint8_t)cfg.inaBatteryAddr);
+    inaBatReady = inaBat->begin(&Wire);
+    if (!inaBatReady) {
+      Serial.printf("[ina-bat] init failed at 0x%02X\n", cfg.inaBatteryAddr);
+    } else {
+      inaBat->setCalibration_16V_400mA();  // realistisch fuer LiPo + ESP
+    }
+  }
+
+  if (cfg.inaSolarEnabled) {
+    inaSol = new Adafruit_INA219((uint8_t)cfg.inaSolarAddr);
+    inaSolReady = inaSol->begin(&Wire);
+    if (!inaSolReady) {
+      Serial.printf("[ina-sol] init failed at 0x%02X\n", cfg.inaSolarAddr);
+    } else {
+      inaSol->setCalibration_32V_2A();  // Solar kann hoeher / mehr Strom
+    }
+  }
+
+  envRainPin = (cfg.rainEnabled && cfg.rainPin > 0) ? cfg.rainPin : -1;
+}
+
 void readScalesRaw(double rawOut[NUM_SCALES]) {
   for (int i = 0; i < NUM_SCALES; i++) {
     if (!hxActive[i]) { rawOut[i] = NAN; continue; }
-    if (!hx[i].wait_ready_timeout(500)) {
-      rawOut[i] = NAN;
-      continue;
-    }
+    if (!hx[i].wait_ready_timeout(500)) { rawOut[i] = NAN; continue; }
     long r = hx[i].read_average(5);
     rawOut[i] = (double)r;
   }
@@ -55,21 +110,31 @@ double readScaleRawAvg(int idx, int samples) {
   return (double)hx[idx].read_average(samples);
 }
 
-void readEnvironment(double& tempC, double& humidity) {
-  // DHT22 braucht ~2s zwischen Reads. Bei Cold-Boot direkt nach init()
-  // ist der erste Read oft NAN, daher zweimal versuchen.
-  for (int attempt = 0; attempt < 2; attempt++) {
-    float t = dht.readTemperature();
-    float h = dht.readHumidity();
-    if (!isnan(t) && !isnan(h)) {
-      tempC = (double)t;
-      humidity = (double)h;
-      return;
-    }
-    delay(2100);
+void readEnv(EnvReading& out, const MainConfig& /*cfg*/) {
+  if (bmeReady) {
+    bme.takeForcedMeasurement();
+    float t = bme.readTemperature();
+    float h = bme.readHumidity();
+    float p = bme.readPressure();
+    if (!isnan(t)) out.tempC    = (double)t;
+    if (!isnan(h)) out.humidity = (double)h;
+    if (!isnan(p) && p > 0) out.pressure = (double)p / 100.0; // hPa
   }
-  tempC = NAN;
-  humidity = NAN;
+  if (inaBatReady && inaBat) {
+    float v = inaBat->getBusVoltage_V();
+    float i = inaBat->getCurrent_mA();
+    out.batteryV = (double)v;
+    out.batteryA = (double)i / 1000.0;  // A
+  }
+  if (inaSolReady && inaSol) {
+    float v = inaSol->getBusVoltage_V();
+    float i = inaSol->getCurrent_mA();
+    out.solarV = (double)v;
+    out.solarA = (double)i / 1000.0;
+  }
+  if (envRainPin > 0) {
+    out.rainRaw = analogRead(envRainPin);
+  }
 }
 
 float readVBat() {

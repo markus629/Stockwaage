@@ -115,8 +115,8 @@ bool measureAndUpload() {
   double rawScales[NUM_SCALES];
   sensors::readScalesRaw(rawScales);
 
-  double ambientC = NAN, ambientHumidity = NAN;
-  sensors::readEnvironment(ambientC, ambientHumidity);
+  sensors::EnvReading env;
+  sensors::readEnv(env, cfg.main);
 
   float vBat = sensors::readVBat();
 
@@ -127,8 +127,17 @@ bool measureAndUpload() {
   fb::writeInteger(fields, "ts",    (long long)tsMs);
   fb::writeNumber (fields, "vBat",  vBat);
   fb::writeInteger(fields, "boots", bootCount);
-  if (!isnan(ambientC))        fb::writeNumber(fields, "ambientC",        ambientC);
-  if (!isnan(ambientHumidity)) fb::writeNumber(fields, "ambientHumidity", ambientHumidity);
+  if (!isnan(env.tempC))    fb::writeNumber(fields, "ambientC",        env.tempC);
+  if (!isnan(env.humidity)) fb::writeNumber(fields, "ambientHumidity", env.humidity);
+  if (!isnan(env.pressure)) fb::writeNumber(fields, "ambientPressure", env.pressure);
+  if (!isnan(env.batteryV)) fb::writeNumber(fields, "batteryV",        env.batteryV);
+  if (!isnan(env.batteryA)) fb::writeNumber(fields, "batteryA",        env.batteryA);
+  if (!isnan(env.solarV))   fb::writeNumber(fields, "solarV",          env.solarV);
+  if (!isnan(env.solarA))   fb::writeNumber(fields, "solarA",          env.solarA);
+  if (env.rainRaw >= 0)     fb::writeInteger(fields, "rainRaw",        env.rainRaw);
+
+  // ambientC fuer die Waagen-Temperaturkompensation.
+  const double ambientC = env.tempC;
 
   // scales: { s1: { raw, kg }, ... } als verschachtelte Map
   JsonObject scalesFields = fields.createNestedObject("scales")
@@ -207,6 +216,9 @@ void setup() {
     dtPins[i] = cfg.scales[i].exists ? cfg.scales[i].dtPin : -1;
   }
   sensors::initScales(dtPins);
+
+  // I2C-Sensoren (BME280, INA219x2) + Regensensor.
+  sensors::initEnv(cfg.main);
 
   commands::processPending(idToken, deviceId, cfg);
   // commands haben evtl. die Config geaendert (tare/cal) -> erneut laden

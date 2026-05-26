@@ -26,6 +26,23 @@ bool RuntimeConfig::load(const String& idToken, const String& deviceId) {
                                                        main.intervalSec);
       main.stayAwakeUntilMs = (uint64_t)fb::readInteger(
                                   fields["stayAwakeUntilMs"], 0);
+      main.i2cSda           = (int)fb::readInteger(fields["i2cSda"],
+                                                   main.i2cSda);
+      main.i2cScl           = (int)fb::readInteger(fields["i2cScl"],
+                                                   main.i2cScl);
+      main.bme280Enabled    = fb::readBool   (fields["bme280Enabled"], false);
+      main.bme280Addr       = (int)fb::readInteger(fields["bme280Addr"],
+                                                   main.bme280Addr);
+      main.inaBatteryEnabled = fb::readBool  (fields["inaBatteryEnabled"],
+                                              false);
+      main.inaBatteryAddr    = (int)fb::readInteger(fields["inaBatteryAddr"],
+                                                    main.inaBatteryAddr);
+      main.inaSolarEnabled   = fb::readBool  (fields["inaSolarEnabled"], false);
+      main.inaSolarAddr      = (int)fb::readInteger(fields["inaSolarAddr"],
+                                                    main.inaSolarAddr);
+      main.rainEnabled       = fb::readBool  (fields["rainEnabled"], false);
+      main.rainPin           = (int)fb::readInteger(fields["rainPin"],
+                                                    main.rainPin);
     }
   }
 

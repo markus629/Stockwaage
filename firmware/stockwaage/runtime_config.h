@@ -17,8 +17,18 @@ struct ScaleConfig {
 };
 
 struct MainConfig {
-  uint32_t intervalSec      = DEFAULT_INTERVAL_SEC;
-  uint64_t stayAwakeUntilMs = 0;       // ESP bleibt wach bis hier
+  uint32_t intervalSec       = DEFAULT_INTERVAL_SEC;
+  uint64_t stayAwakeUntilMs  = 0;       // ESP bleibt wach bis hier
+  int      i2cSda            = 21;
+  int      i2cScl            = 22;
+  bool     bme280Enabled     = false;
+  int      bme280Addr        = 0x76;
+  bool     inaBatteryEnabled = false;
+  int      inaBatteryAddr    = 0x40;
+  bool     inaSolarEnabled   = false;
+  int      inaSolarAddr      = 0x41;
+  bool     rainEnabled       = false;
+  int      rainPin           = 33;
 };
 
 class RuntimeConfig {

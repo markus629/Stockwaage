@@ -2,10 +2,29 @@
 #include <Arduino.h>
 #include "config.h"
 
+struct MainConfig;  // forward decl, voller Typ in runtime_config.h
+
 namespace sensors {
 
-// Peripherie ohne Waagen-Pins (DHT, ADC). Muss einmal beim Boot laufen.
+// Sammeltyp fuer Umgebungs-/Versorgungs-Sensoren. NAN / -1 = nicht
+// gemessen (Sensor disabled oder Fehler).
+struct EnvReading {
+  double tempC    = NAN;
+  double humidity = NAN;
+  double pressure = NAN;
+  double batteryV = NAN;
+  double batteryA = NAN;
+  double solarV   = NAN;
+  double solarA   = NAN;
+  int    rainRaw  = -1;
+};
+
+// Einmal beim Boot (ADC-Resolution etc.).
 void init();
+
+// I2C-Bus + aktivierte Sensoren initialisieren. Muss NACH cfg.load
+// aufgerufen werden. Sensoren ohne mainCfg.*Enabled werden uebersprungen.
+void initEnv(const MainConfig& cfg);
 
 // HX711-Instanzen mit den Pins aus der Runtime-Config initialisieren.
 // dtPins[i] <= 0 -> Waage i ist deaktiviert (kein HX711-init, kein Read).
@@ -20,10 +39,10 @@ void readScalesRaw(double rawOut[NUM_SCALES]);
 // Liefert NAN bei Timeout oder wenn Waage nicht aktiv ist.
 double readScaleRawAvg(int scaleIdx, int samples);
 
-// AM2302/DHT22 lesen. Beide Werte NAN bei Fehler / Sensor nicht angeschlossen.
-void readEnvironment(double& tempC, double& humidity);
+// Liest alle aktivierten Umgebungssensoren in einen Rutsch.
+void readEnv(EnvReading& out, const MainConfig& cfg);
 
-// Akku-Spannung in Volt.
+// Akku-Spannung (Spannungsteiler auf ADC). Fallback wenn kein INA219.
 float readVBat();
 
 } // namespace sensors

@@ -227,13 +227,6 @@ export default function SettingsPanel({
           </Hint>
         </Field>
       </SensorSection>
-
-      <p className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-        <strong>Hinweis:</strong> Diese Sensor-Einstellungen werden in
-        Firestore gespeichert, aber die aktuelle Firmware unterstützt
-        BME280/INA219/Regensensor noch nicht. Beim nächsten Firmware-Update
-        werden die Werte hier wirksam.
-      </p>
     </div>
   );
 }
