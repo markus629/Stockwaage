@@ -19,6 +19,7 @@ type Props = {
   reading: ScaleReading | undefined;
   readings: Reading[];
   prefs: ScaleUiPrefs;
+  pinOwners: Record<number, string>;
   onPrefsChange: (patch: Partial<ScaleUiPrefs>) => void;
   onCalibrate: () => void;
   onDelete: () => void;
@@ -63,6 +64,7 @@ export default function ScaleCard({
   reading,
   readings,
   prefs,
+  pinOwners,
   onPrefsChange,
   onCalibrate,
   onDelete,
@@ -166,6 +168,7 @@ export default function ScaleCard({
                       deviceId={deviceId}
                       scaleId={scaleId}
                       cfg={cfg}
+                      pinOwners={pinOwners}
                     />
                   )}
                 </div>
@@ -251,10 +254,12 @@ function PinPanel({
   deviceId,
   scaleId,
   cfg,
+  pinOwners,
 }: {
   deviceId: string;
   scaleId: string;
   cfg: ScaleConfig;
+  pinOwners: Record<number, string>;
 }) {
   const currentPin = cfg.dtPin ?? DEFAULT_DT_PIN[scaleId];
   return (
@@ -269,17 +274,22 @@ function PinPanel({
           }}
           className="mt-1 w-full rounded border border-neutral-300 px-2 py-1 text-sm"
         >
-          {ALLOWED_DT_PINS.map((p) => (
-            <option key={p} value={p}>
-              GPIO {p}
-              {DEFAULT_DT_PIN[scaleId] === p ? " (Standard)" : ""}
-            </option>
-          ))}
+          {ALLOWED_DT_PINS.map((p) => {
+            const owner = pinOwners[p];
+            const takenByOther = owner && owner !== scaleId;
+            return (
+              <option key={p} value={p} disabled={!!takenByOther}>
+                GPIO {p}
+                {DEFAULT_DT_PIN[scaleId] === p ? " (Standard)" : ""}
+                {takenByOther ? ` — belegt von ${owner}` : ""}
+              </option>
+            );
+          })}
         </select>
       </label>
       <p className="mt-2 text-xs text-neutral-500">
         SCK liegt fest auf GPIO 4 (alle Waagen teilen sich SCK). Pin-Änderung
-        wirkt beim nächsten ESP-Wakeup. Doppelte Pins werden vom ESP ignoriert.
+        wirkt beim nächsten ESP-Wakeup.
       </p>
     </div>
   );

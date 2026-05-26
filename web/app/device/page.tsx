@@ -116,6 +116,17 @@ function DeviceDetail() {
     [scales],
   );
 
+  const pinOwners = useMemo(() => {
+    const map: Record<number, string> = {};
+    for (const sid of scaleIds) {
+      const pin = scales[sid]?.dtPin;
+      if (typeof pin === "number" && pin > 0 && map[pin] === undefined) {
+        map[pin] = sid;
+      }
+    }
+    return map;
+  }, [scaleIds, scales]);
+
   if (user === "loading") return <div className="p-6">Laden…</div>;
   if (!user)
     return (
@@ -252,6 +263,7 @@ function DeviceDetail() {
               reading={latest?.scales?.[sid]}
               readings={windowReadings}
               prefs={uiPrefs.get(sid)}
+              pinOwners={pinOwners}
               onPrefsChange={(patch) => uiPrefs.set(sid, patch)}
               onCalibrate={() => setWizardFor(sid)}
               onDelete={() => removeScale(deviceId, sid)}
@@ -267,7 +279,7 @@ function DeviceDetail() {
         {scaleIds.length < MAX_SCALES && (
           <button
             type="button"
-            onClick={() => addScale(deviceId, scaleIds)}
+            onClick={() => addScale(deviceId, scaleIds, pinOwners)}
             className="mt-3 w-full rounded-lg border border-dashed border-neutral-300 bg-white px-3 py-3 text-sm font-medium text-neutral-600 hover:border-neutral-500 hover:bg-neutral-50"
           >
             + Waage hinzufügen{" "}

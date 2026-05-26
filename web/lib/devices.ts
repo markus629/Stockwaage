@@ -148,13 +148,18 @@ export async function updateMainConfig(
 export async function addScale(
   deviceId: string,
   existingIds: Iterable<string>,
+  pinOwners: Record<number, string>,
 ): Promise<string | null> {
   const taken = new Set(existingIds);
   const nextSlot = SCALE_SLOTS.find((s) => !taken.has(s));
   if (!nextSlot) return null;
-  await setDoc(scaleDoc(deviceId, nextSlot), {
-    dtPin: DEFAULT_DT_PIN[nextSlot],
-  });
+  const preferred = DEFAULT_DT_PIN[nextSlot];
+  const pin =
+    preferred && !pinOwners[preferred]
+      ? preferred
+      : ALLOWED_DT_PINS.find((p) => !pinOwners[p]);
+  if (!pin) return null;
+  await setDoc(scaleDoc(deviceId, nextSlot), { dtPin: pin });
   return nextSlot;
 }
 
