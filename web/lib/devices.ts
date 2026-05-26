@@ -62,6 +62,7 @@ export type ScaleConfig = {
   tempCoef?: number;
   tempRefC?: number;
   dtPin?: number;
+  onDashboard?: boolean;
   learning?: { startedAt: number };
 };
 

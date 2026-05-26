@@ -9,6 +9,7 @@ import {
   type ScaleReading,
 } from "@/lib/devices";
 import type { ConfigTab, ScaleUiPrefs } from "@/lib/uiPrefs";
+import DailyChangeChart from "./DailyChangeChart";
 import LearningPhase from "./LearningPhase";
 import ScaleChart from "./ScaleChart";
 
@@ -112,6 +113,28 @@ export default function ScaleCard({
         </span>
         <button
           type="button"
+          aria-label={
+            cfg.onDashboard ? "Vom Dashboard entfernen" : "Aufs Dashboard"
+          }
+          title={cfg.onDashboard ? "Vom Dashboard entfernen" : "Aufs Dashboard"}
+          onClick={(e) => {
+            e.stopPropagation();
+            updateScaleConfig(deviceId, scaleId, {
+              onDashboard: !cfg.onDashboard,
+            });
+          }}
+          className={`rounded p-1 ${
+            cfg.onDashboard
+              ? "text-amber-500 hover:bg-amber-50"
+              : "text-neutral-300 hover:bg-neutral-100 hover:text-neutral-500"
+          }`}
+        >
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M10 1.5l2.6 5.3 5.9.86-4.25 4.14 1 5.85L10 14.77 4.75 17.65l1-5.85L1.5 7.66l5.9-.86L10 1.5z" />
+          </svg>
+        </button>
+        <button
+          type="button"
           aria-label={`Waage ${scaleId} löschen`}
           onClick={(e) => {
             e.stopPropagation();
@@ -177,6 +200,7 @@ export default function ScaleCard({
           </div>
 
           <ScaleChart scaleId={scaleId} readings={readings} />
+          <DailyChangeChart scaleId={scaleId} readings={readings} />
         </div>
       )}
     </li>

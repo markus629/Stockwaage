@@ -26,6 +26,7 @@ import {
   type ScaleConfig,
 } from "@/lib/devices";
 import CalibrationWizard from "@/components/CalibrationWizard";
+import Dashboard from "@/components/Dashboard";
 import ScaleCard from "@/components/ScaleCard";
 import SettingsPanel from "@/components/SettingsPanel";
 import { useDeviceTab, useScaleUiPrefs } from "@/lib/uiPrefs";
@@ -115,7 +116,9 @@ function DeviceDetail() {
     if (!user || user === "loading" || !deviceId) return;
     const start = new Date();
     start.setHours(0, 0, 0, 0);
-    const cutoff = start.getTime() - (days - 1) * 24 * 3600 * 1000;
+    // Dashboard zeigt fix 3 Tage -> mindestens so viel laden.
+    const effectiveDays = Math.max(days, 3);
+    const cutoff = start.getTime() - (effectiveDays - 1) * 24 * 3600 * 1000;
     const unsub = onSnapshot(
       query(
         readingsCol(deviceId),
@@ -190,6 +193,12 @@ function DeviceDetail() {
       </header>
 
       <nav className="mb-4 flex border-b border-neutral-200">
+        <TopTab
+          active={tab === "dashboard"}
+          onClick={() => setTab("dashboard")}
+        >
+          Dashboard
+        </TopTab>
         <TopTab active={tab === "scales"} onClick={() => setTab("scales")}>
           Waagen
           <span className="ml-1.5 text-xs text-neutral-400">
@@ -203,6 +212,15 @@ function DeviceDetail() {
           Einstellungen
         </TopTab>
       </nav>
+
+      {tab === "dashboard" && (
+        <Dashboard
+          readings={windowReadings}
+          scales={scales}
+          scaleIds={scaleIds}
+          mainCfg={mainCfg}
+        />
+      )}
 
       {tab === "scales" && (
         <section>
