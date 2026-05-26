@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   deleteField,
   doc,
   serverTimestamp,
@@ -33,6 +34,7 @@ export type ScaleConfig = {
   scaleFactor?: number;
   tempCoef?: number;
   tempRefC?: number;
+  dtPin?: number;
   learning?: { startedAt: number };
 };
 
@@ -68,8 +70,24 @@ export type Command = {
 
 // ----- Firestore paths ------------------------------------------------------
 
-export const NUM_SCALES = 8;
-export const SCALE_IDS = Array.from({ length: NUM_SCALES }, (_, i) => `s${i + 1}`);
+export const MAX_SCALES = 8;
+export const SCALE_SLOTS = Array.from(
+  { length: MAX_SCALES },
+  (_, i) => `s${i + 1}`,
+);
+
+// ESP32 GPIOs die als HX711-DT (Input) sicher nutzbar sind.
+// Reserviert: 0 (Portal-Button), 1/3 (Serial), 4 (HX711 SCK), 6-11 (Flash),
+// 12 (Boot-Strap LOW), 23 (OneWire), 32 (VBat).
+export const ALLOWED_DT_PINS = [
+  5, 13, 14, 15, 16, 17, 18, 19, 21, 22, 25, 26, 27, 33,
+] as const;
+
+// Default-Pinbelegung pro Slot, identisch zur ESP-Firmware (config.h).
+export const DEFAULT_DT_PIN: Record<string, number> = {
+  s1: 13, s2: 14, s3: 16, s4: 17,
+  s5: 18, s6: 19, s7: 21, s8: 22,
+};
 
 export const devicePath = (deviceId: string) =>
   ["users", ownerUid, "devices", deviceId] as const;
@@ -125,6 +143,26 @@ export async function updateMainConfig(
   patch: Partial<MainConfig>,
 ): Promise<void> {
   await setDoc(mainConfigDoc(deviceId), patch, { merge: true });
+}
+
+export async function addScale(
+  deviceId: string,
+  existingIds: Iterable<string>,
+): Promise<string | null> {
+  const taken = new Set(existingIds);
+  const nextSlot = SCALE_SLOTS.find((s) => !taken.has(s));
+  if (!nextSlot) return null;
+  await setDoc(scaleDoc(deviceId, nextSlot), {
+    dtPin: DEFAULT_DT_PIN[nextSlot],
+  });
+  return nextSlot;
+}
+
+export async function removeScale(
+  deviceId: string,
+  scaleId: string,
+): Promise<void> {
+  await deleteDoc(scaleDoc(deviceId, scaleId));
 }
 
 // ----- Math ------------------------------------------------------------------

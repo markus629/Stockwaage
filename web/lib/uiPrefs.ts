@@ -1,10 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import {
-  DEFAULT_SCALE_PREFS,
-  type ScaleUiPrefs,
-} from "@/components/ScaleCard";
+
+export type ConfigTab = "calib" | "temp" | "pin";
+
+export type ScaleUiPrefs = {
+  cardOpen: boolean;
+  configOpen: boolean;
+  configTab: ConfigTab;
+};
+
+export const DEFAULT_SCALE_PREFS: ScaleUiPrefs = {
+  cardOpen: true,
+  configOpen: false,
+  configTab: "calib",
+};
 
 type AllPrefs = Record<string, ScaleUiPrefs>;
 

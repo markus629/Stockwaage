@@ -13,12 +13,14 @@ import {
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import {
+  addScale,
   deviceDoc,
   mainConfigDoc,
+  MAX_SCALES,
   readingsCol,
+  removeScale,
   scalesCol,
   updateMainConfig,
-  SCALE_IDS,
   type Device,
   type MainConfig,
   type Reading,
@@ -107,6 +109,11 @@ function DeviceDetail() {
   const tempAddrs = useMemo(
     () => (latest?.temps ? Object.keys(latest.temps) : []),
     [latest],
+  );
+
+  const scaleIds = useMemo(
+    () => Object.keys(scales).sort((a, b) => a.localeCompare(b)),
+    [scales],
   );
 
   if (user === "loading") return <div className="p-6">Laden…</div>;
@@ -236,7 +243,7 @@ function DeviceDetail() {
           Waagen
         </h2>
         <ul className="grid gap-3">
-          {SCALE_IDS.map((sid) => (
+          {scaleIds.map((sid) => (
             <ScaleCard
               key={sid}
               deviceId={deviceId}
@@ -247,9 +254,28 @@ function DeviceDetail() {
               prefs={uiPrefs.get(sid)}
               onPrefsChange={(patch) => uiPrefs.set(sid, patch)}
               onCalibrate={() => setWizardFor(sid)}
+              onDelete={() => removeScale(deviceId, sid)}
             />
           ))}
         </ul>
+        {scaleIds.length === 0 && (
+          <p className="mb-3 rounded border border-dashed border-neutral-300 bg-white p-4 text-center text-sm text-neutral-500">
+            Noch keine Waage konfiguriert. Mit „+ Waage hinzufügen“ legst du
+            eine an. Der ESP übernimmt die Pin-Belegung beim nächsten Wakeup.
+          </p>
+        )}
+        {scaleIds.length < MAX_SCALES && (
+          <button
+            type="button"
+            onClick={() => addScale(deviceId, scaleIds)}
+            className="mt-3 w-full rounded-lg border border-dashed border-neutral-300 bg-white px-3 py-3 text-sm font-medium text-neutral-600 hover:border-neutral-500 hover:bg-neutral-50"
+          >
+            + Waage hinzufügen{" "}
+            <span className="text-xs font-normal text-neutral-400">
+              ({scaleIds.length}/{MAX_SCALES})
+            </span>
+          </button>
+        )}
       </section>
 
       {wizardFor && (

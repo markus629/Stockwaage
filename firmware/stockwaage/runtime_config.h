@@ -6,12 +6,14 @@
 // werden verwendet wenn Firestore noch leer ist.
 
 struct ScaleConfig {
+  bool   exists        = false;  // true wenn Firestore-Dokument vorhanden
   bool   enabled       = false;
   String name;                   // Anzeigename, leer = "s1" usw.
   double offset        = 0.0;    // raw bei 0 kg
   double scaleFactor   = 0.0;    // (raw - offset) / kg; 0 = nicht kalibriert
   double tempCoef      = 0.0;    // raw-Drift pro Grad C
   double tempRefC      = 20.0;   // Referenz-Temperatur fuer Drift
+  int    dtPin         = -1;     // HX711 DT-Pin; -1 = kein Pin -> Waage skip
 };
 
 struct MainConfig {

@@ -39,12 +39,15 @@ bool RuntimeConfig::load(const String& idToken, const String& deviceId) {
     DynamicJsonDocument doc(1024);
     if (deserializeJson(doc, resp2)) continue;
     JsonObject f = doc["fields"];
+    scales[i].exists      = true;
     scales[i].enabled     = fb::readBool   (f["enabled"], false);
     scales[i].name        = fb::readString (f["name"], "");
     scales[i].offset      = fb::readNumber (f["offset"], 0.0);
     scales[i].scaleFactor = fb::readNumber (f["scaleFactor"], 0.0);
     scales[i].tempCoef    = fb::readNumber (f["tempCoef"], 0.0);
     scales[i].tempRefC    = fb::readNumber (f["tempRefC"], 20.0);
+    scales[i].dtPin       = (int)fb::readInteger(f["dtPin"],
+                                                 PIN_HX711_DT[i]);
   }
 
   return true;

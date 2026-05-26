@@ -217,6 +217,15 @@ void setup() {
   // Config + Commands. Portal-Wert dient als Default, falls Firestore leer.
   cfg.main.intervalSec = bootIntervalSec;
   cfg.load(idToken, deviceId);
+
+  // HX711 mit den DT-Pins aus der Firestore-Config initialisieren.
+  // Waagen ohne Doku (exists=false) werden ueberspringen -> dtPin=-1.
+  int dtPins[NUM_SCALES];
+  for (int i = 0; i < NUM_SCALES; i++) {
+    dtPins[i] = cfg.scales[i].exists ? cfg.scales[i].dtPin : -1;
+  }
+  sensors::initScales(dtPins);
+
   commands::processPending(idToken, deviceId, cfg);
   // commands haben evtl. die Config geaendert (tare/cal) -> erneut laden
   cfg.load(idToken, deviceId);
