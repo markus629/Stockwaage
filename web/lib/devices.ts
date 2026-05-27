@@ -40,15 +40,19 @@ export type MainConfig = {
   rainPin?: number;
 };
 
-export const DEFAULT_I2C_SDA = 21;
-export const DEFAULT_I2C_SCL = 22;
+// ESP32-S3-WROOM-1 N16R8: SPI-Flash 26-32, Octal-PSRAM 33-37, USB 19/20,
+// UART0 43/44, Strapping 0/3/45/46, Onboard-LED 48 -> alle nicht in den
+// User-Listen. ADC1 = GPIO 1-10.
+export const DEFAULT_I2C_SDA = 8;
+export const DEFAULT_I2C_SCL = 9;
 export const ALLOWED_I2C_PINS = [
-  5, 13, 14, 15, 16, 17, 18, 19, 21, 22, 25, 26, 27, 33,
+  5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 21, 38, 39, 40, 41, 42, 47,
 ] as const;
 export const BME280_ADDRS = [0x76, 0x77] as const;
 export const INA219_ADDRS = [0x40, 0x41, 0x44, 0x45] as const;
-export const ALLOWED_RAIN_PINS = [33, 34, 35, 36, 39] as const;
-export const DEFAULT_RAIN_PIN = 33;
+// Rain braucht ADC1 (1-10), ohne SCK (4), VBat (1), Strapping (3)
+export const ALLOWED_RAIN_PINS = [2, 5, 6, 7, 8, 9, 10] as const;
+export const DEFAULT_RAIN_PIN = 2;
 export const DEFAULT_BME280_ADDR = 0x76;
 export const DEFAULT_INA_BATTERY_ADDR = 0x40;
 export const DEFAULT_INA_SOLAR_ADDR = 0x41;
@@ -113,14 +117,17 @@ export const SCALE_SLOTS = Array.from(
 // ESP32 GPIOs die als HX711-DT (Input) sicher nutzbar sind.
 // Reserviert: 0 (Portal-Button), 1/3 (Serial), 4 (HX711 SCK), 6-11 (Flash),
 // 12 (Boot-Strap LOW), 23 (OneWire), 32 (VBat).
+// HX711 DT braucht nur Digital-Output-faehig. Auf S3: 5-18, 21, 38-42, 47.
+// Vermieden: SCK (4), VBat (1), Strapping (0,3,45,46), USB (19,20),
+// UART0 (43,44), SPI Flash (26-32), Octal-PSRAM (33-37), LED (48).
 export const ALLOWED_DT_PINS = [
-  5, 13, 14, 15, 16, 17, 18, 19, 21, 22, 25, 26, 27, 33,
+  5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 21, 38, 39, 40, 41, 42, 47,
 ] as const;
 
 // Default-Pinbelegung pro Slot, identisch zur ESP-Firmware (config.h).
 export const DEFAULT_DT_PIN: Record<string, number> = {
-  s1: 13, s2: 14, s3: 16, s4: 17,
-  s5: 18, s6: 19, s7: 21, s8: 22,
+  s1: 13, s2: 14, s3: 15, s4: 16,
+  s5: 17, s6: 18, s7: 21, s8: 38,
 };
 
 export const devicePath = (deviceId: string) =>
@@ -214,7 +221,7 @@ export function computePinOwners(
   const map: Record<number, string> = {
     0: "Portal-Button",
     4: "HX711 SCK",
-    32: "VBat ADC",
+    1: "VBat ADC",
   };
   for (const sid of scaleIds) {
     const pin = scales[sid]?.dtPin ?? DEFAULT_DT_PIN[sid];

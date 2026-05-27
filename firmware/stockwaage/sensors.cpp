@@ -29,14 +29,16 @@ void init() {
 }
 
 void initScales(const int dtPins[NUM_SCALES]) {
-  bool pinUsed[40] = {false};
+  // ESP32-S3 hat GPIOs 0-48, plus reservierte SPI-Flash (26-32) und
+  // Octal-PSRAM (33-37) bei N*R8 Modulen.
+  bool pinUsed[50] = {false};
   pinUsed[PIN_HX711_SCK] = true;
   pinUsed[PIN_VBAT_ADC]  = true;
   pinUsed[PIN_PORTAL_FORCE] = true;
 
   for (int i = 0; i < NUM_SCALES; i++) {
     int pin = dtPins[i];
-    if (pin <= 0 || pin >= 40 || pinUsed[pin]) {
+    if (pin <= 0 || pin >= 50 || pinUsed[pin]) {
       hxActive[i] = false;
       continue;
     }
