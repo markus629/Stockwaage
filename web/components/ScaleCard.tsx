@@ -11,6 +11,7 @@ import {
 import type { ConfigTab, ScaleUiPrefs } from "@/lib/uiPrefs";
 import DailyChangeChart from "./DailyChangeChart";
 import LearningPhase from "./LearningPhase";
+import PinSelect from "./PinSelect";
 import ScaleChart from "./ScaleChart";
 
 type Props = {
@@ -290,26 +291,14 @@ function PinPanel({
     <div className="text-sm">
       <label className="block">
         <span className="text-xs text-neutral-500">HX711 DT-Pin (GPIO)</span>
-        <select
-          value={currentPin ?? ""}
-          onChange={(e) => {
-            const v = parseInt(e.target.value, 10);
-            if (!isNaN(v)) updateScaleConfig(deviceId, scaleId, { dtPin: v });
-          }}
-          className="mt-1 w-full rounded border border-neutral-300 px-2 py-1 text-sm"
-        >
-          {ALLOWED_DT_PINS.map((p) => {
-            const owner = pinOwners[p];
-            const takenByOther = owner && owner !== scaleId;
-            return (
-              <option key={p} value={p} disabled={!!takenByOther}>
-                GPIO {p}
-                {DEFAULT_DT_PIN[scaleId] === p ? " (Standard)" : ""}
-                {takenByOther ? ` — belegt von ${owner}` : ""}
-              </option>
-            );
-          })}
-        </select>
+        <PinSelect
+          value={currentPin}
+          allowed={ALLOWED_DT_PINS}
+          pinOwners={pinOwners}
+          ownerKey={scaleId}
+          defaultMarker={DEFAULT_DT_PIN[scaleId]}
+          onChange={(v) => updateScaleConfig(deviceId, scaleId, { dtPin: v })}
+        />
       </label>
       <p className="mt-2 text-xs text-neutral-500">
         SCK liegt fest auf GPIO 4 (alle Waagen teilen sich SCK). Pin-Änderung

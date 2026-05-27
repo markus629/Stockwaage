@@ -14,6 +14,7 @@ import { onAuthStateChanged, type User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import {
   addScale,
+  computePinOwners,
   deviceDoc,
   mainConfigDoc,
   MAX_SCALES,
@@ -137,16 +138,10 @@ function DeviceDetail() {
     [scales],
   );
 
-  const pinOwners = useMemo(() => {
-    const map: Record<number, string> = {};
-    for (const sid of scaleIds) {
-      const pin = scales[sid]?.dtPin;
-      if (typeof pin === "number" && pin > 0 && map[pin] === undefined) {
-        map[pin] = sid;
-      }
-    }
-    return map;
-  }, [scaleIds, scales]);
+  const pinOwners = useMemo(
+    () => computePinOwners(scales, scaleIds, mainCfg),
+    [scales, scaleIds, mainCfg],
+  );
 
   if (user === "loading") return <div className="p-6">Laden…</div>;
   if (!user)
@@ -271,6 +266,7 @@ function DeviceDetail() {
           intervalSecFallback={device?.intervalSec}
           days={days}
           onDaysChange={setDays}
+          pinOwners={pinOwners}
         />
       )}
 

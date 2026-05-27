@@ -204,6 +204,35 @@ export async function removeScale(
   await deleteDoc(scaleDoc(deviceId, scaleId));
 }
 
+// Sammelt alle in der Config belegten GPIO-Pins inkl. System-Pins.
+// Pro Pin der Owner-Label fuer die UI-Anzeige ("belegt von …").
+export function computePinOwners(
+  scales: Record<string, ScaleConfig>,
+  scaleIds: string[],
+  mainCfg: MainConfig,
+): Record<number, string> {
+  const map: Record<number, string> = {
+    0: "Portal-Button",
+    4: "HX711 SCK",
+    32: "VBat ADC",
+  };
+  for (const sid of scaleIds) {
+    const pin = scales[sid]?.dtPin ?? DEFAULT_DT_PIN[sid];
+    if (typeof pin === "number" && pin > 0 && map[pin] === undefined) {
+      map[pin] = sid;
+    }
+  }
+  const sda = mainCfg.i2cSda ?? DEFAULT_I2C_SDA;
+  const scl = mainCfg.i2cScl ?? DEFAULT_I2C_SCL;
+  if (map[sda] === undefined) map[sda] = "I2C SDA";
+  if (map[scl] === undefined) map[scl] = "I2C SCL";
+  if (mainCfg.rainEnabled) {
+    const rp = mainCfg.rainPin ?? DEFAULT_RAIN_PIN;
+    if (map[rp] === undefined) map[rp] = "Regensensor";
+  }
+  return map;
+}
+
 // ----- Math ------------------------------------------------------------------
 
 export type Regression = {

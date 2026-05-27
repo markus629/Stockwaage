@@ -15,6 +15,7 @@ import {
   type MainConfig,
   type Reading,
 } from "@/lib/devices";
+import PinSelect from "./PinSelect";
 
 const DAYS_MIN = 1;
 const DAYS_MAX = 30;
@@ -26,6 +27,7 @@ type Props = {
   intervalSecFallback?: number;
   days: number;
   onDaysChange: (n: number) => void;
+  pinOwners: Record<number, string>;
 };
 
 function hex(n: number | undefined): string {
@@ -40,6 +42,7 @@ export default function SettingsPanel({
   intervalSecFallback,
   days,
   onDaysChange,
+  pinOwners,
 }: Props) {
   const i2cSda = mainCfg.i2cSda ?? DEFAULT_I2C_SDA;
   const i2cScl = mainCfg.i2cScl ?? DEFAULT_I2C_SCL;
@@ -91,7 +94,8 @@ export default function SettingsPanel({
               value={i2cSda}
               allowed={ALLOWED_I2C_PINS}
               onChange={(v) => updateMainConfig(deviceId, { i2cSda: v })}
-              busy={i2cScl}
+              pinOwners={pinOwners}
+              ownerKey="I2C SDA"
             />
           </Field>
           <Field label="SCL (GPIO)">
@@ -99,7 +103,8 @@ export default function SettingsPanel({
               value={i2cScl}
               allowed={ALLOWED_I2C_PINS}
               onChange={(v) => updateMainConfig(deviceId, { i2cScl: v })}
-              busy={i2cSda}
+              pinOwners={pinOwners}
+              ownerKey="I2C SCL"
             />
           </Field>
         </div>
@@ -220,6 +225,8 @@ export default function SettingsPanel({
             value={mainCfg.rainPin ?? DEFAULT_RAIN_PIN}
             allowed={ALLOWED_RAIN_PINS}
             onChange={(v) => updateMainConfig(deviceId, { rainPin: v })}
+            pinOwners={pinOwners}
+            ownerKey="Regensensor"
           />
           <Hint>
             Nur input-only GPIOs der ADC1-Bank (33–39). Werte: trocken ~0,
@@ -312,33 +319,6 @@ function Field({
 function Hint({ children }: { children: React.ReactNode }) {
   return (
     <span className="mt-1 block text-xs text-neutral-500">{children}</span>
-  );
-}
-
-function PinSelect({
-  value,
-  allowed,
-  onChange,
-  busy,
-}: {
-  value: number;
-  allowed: readonly number[];
-  onChange: (v: number) => void;
-  busy?: number;
-}) {
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(parseInt(e.target.value, 10))}
-      className="mt-1 w-full rounded border border-neutral-300 px-2 py-1 text-sm"
-    >
-      {allowed.map((p) => (
-        <option key={p} value={p} disabled={busy !== undefined && busy === p}>
-          GPIO {p}
-          {busy === p ? " — anderswo belegt" : ""}
-        </option>
-      ))}
-    </select>
   );
 }
 
