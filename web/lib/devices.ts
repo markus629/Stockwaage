@@ -41,6 +41,12 @@ export type MainConfig = {
   // Regensensor (analog)
   rainEnabled?: boolean;
   rainPin?: number;
+  // Wake-Button: weckt den ESP aus Deep-Sleep ueber einen externen
+  // Taster. wakeButtonLevel = 0 -> Taster zieht Pin auf GND,
+  // 1 -> Taster zieht Pin auf 3.3V.
+  wakeButtonEnabled?: boolean;
+  wakeButtonPin?: number;
+  wakeButtonLevel?: number;
 };
 
 // ESP32-S3-WROOM-1 N16R8: SPI-Flash 26-32, Octal-PSRAM 33-37, USB 19/20,
@@ -56,6 +62,13 @@ export const INA219_ADDRS = [0x40, 0x41, 0x44, 0x45] as const;
 // Rain braucht ADC1 (1-10), ohne SCK (4), VBat (1), Strapping (3)
 export const ALLOWED_RAIN_PINS = [2, 5, 6, 7, 8, 9, 10] as const;
 export const DEFAULT_RAIN_PIN = 2;
+
+// Wake-Button: RTC-faehige GPIOs auf S3 = 0-21. Wir nehmen
+// nur low-noise Pins die nicht Strapping/USB/Flash sind.
+export const ALLOWED_WAKE_PINS = [
+  5, 6, 7, 10, 11, 12, 13, 14, 15, 16, 17, 18, 21,
+] as const;
+export const DEFAULT_WAKE_PIN = 5;
 export const DEFAULT_BME280_ADDR = 0x76;
 export const DEFAULT_INA_BATTERY_ADDR = 0x40;
 export const DEFAULT_INA_SOLAR_ADDR = 0x41;
@@ -254,6 +267,10 @@ export function computePinOwners(
   if (mainCfg.rainEnabled) {
     const rp = mainCfg.rainPin ?? DEFAULT_RAIN_PIN;
     if (map[rp] === undefined) map[rp] = "Regensensor";
+  }
+  if (mainCfg.wakeButtonEnabled) {
+    const wp = mainCfg.wakeButtonPin ?? DEFAULT_WAKE_PIN;
+    if (map[wp] === undefined) map[wp] = "Wake-Button";
   }
   return map;
 }

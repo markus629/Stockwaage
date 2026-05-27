@@ -10,6 +10,8 @@
 #include <WiFiManager.h>
 #include <ArduinoJson.h>
 #include <Preferences.h>
+#include <driver/rtc_io.h>
+#include <esp_sleep.h>
 #include <time.h>
 #include <math.h>
 
@@ -41,6 +43,22 @@ void enterDeepSleep(uint32_t seconds) {
   Serial.printf("Deep Sleep %u s\n", seconds);
   Serial.flush();
   esp_sleep_enable_timer_wakeup((uint64_t)seconds * 1000000ULL);
+  if (cfg.main.wakeButtonEnabled && cfg.main.wakeButtonPin > 0) {
+    gpio_num_t pin = (gpio_num_t)cfg.main.wakeButtonPin;
+    if (rtc_gpio_is_valid_gpio(pin)) {
+      // Bei LOW-Trigger den internen Pull-Up aktivieren, sonst Pull-Down.
+      if (cfg.main.wakeButtonLevel == 0) {
+        rtc_gpio_pullup_en(pin);
+        rtc_gpio_pulldown_dis(pin);
+      } else {
+        rtc_gpio_pulldown_en(pin);
+        rtc_gpio_pullup_dis(pin);
+      }
+      esp_sleep_enable_ext0_wakeup(pin, cfg.main.wakeButtonLevel);
+    } else {
+      Serial.printf("[wake] GPIO %d ist nicht RTC-faehig\n", (int)pin);
+    }
+  }
   esp_deep_sleep_start();
 }
 

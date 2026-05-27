@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   ALLOWED_I2C_PINS,
   ALLOWED_RAIN_PINS,
+  ALLOWED_WAKE_PINS,
   BME280_ADDRS,
   DEFAULT_BME280_ADDR,
   DEFAULT_INA_BATTERY_ADDR,
@@ -11,6 +12,7 @@ import {
   DEFAULT_I2C_SCL,
   DEFAULT_I2C_SDA,
   DEFAULT_RAIN_PIN,
+  DEFAULT_WAKE_PIN,
   INA219_ADDRS,
   isNewerVersion,
   sendCommand,
@@ -173,7 +175,11 @@ export default function SettingsPanel({
             onChange={(v) =>
               updateMainConfig(deviceId, { inaBatteryAddr: v })
             }
-            busy={mainCfg.inaSolarAddr ?? DEFAULT_INA_SOLAR_ADDR}
+            busy={
+              mainCfg.inaSolarEnabled
+                ? mainCfg.inaSolarAddr ?? DEFAULT_INA_SOLAR_ADDR
+                : undefined
+            }
           />
           <Hint>
             Werks-Standard 0x40 (A0+A1 unbeschaltet). Für mehrere INA219
@@ -206,7 +212,11 @@ export default function SettingsPanel({
             onChange={(v) =>
               updateMainConfig(deviceId, { inaSolarAddr: v })
             }
-            busy={mainCfg.inaBatteryAddr ?? DEFAULT_INA_BATTERY_ADDR}
+            busy={
+              mainCfg.inaBatteryEnabled
+                ? mainCfg.inaBatteryAddr ?? DEFAULT_INA_BATTERY_ADDR
+                : undefined
+            }
           />
           <Hint>
             Muss sich von der Akku-Adresse unterscheiden. Empfehlung:
@@ -237,10 +247,52 @@ export default function SettingsPanel({
             ownerKey="Regensensor"
           />
           <Hint>
-            Nur input-only GPIOs der ADC1-Bank (33–39). Werte: trocken ~0,
+            ADC1 (GPIO 1–10) ohne Konflikte. Werte: trocken ~0,
             durchnässt nahe 4095.
           </Hint>
         </Field>
+      </SensorSection>
+
+      <SensorSection
+        title="Wake-Button"
+        subtitle="Externer Taster zwischen GPIO und GND/3.3V, weckt den ESP aus dem Deep-Sleep für eine Sofort-Messung."
+        enabled={mainCfg.wakeButtonEnabled ?? false}
+        onEnabledChange={(v) =>
+          updateMainConfig(deviceId, { wakeButtonEnabled: v })
+        }
+        statusLines={[]}
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="GPIO">
+            <PinSelect
+              value={mainCfg.wakeButtonPin ?? DEFAULT_WAKE_PIN}
+              allowed={ALLOWED_WAKE_PINS}
+              onChange={(v) =>
+                updateMainConfig(deviceId, { wakeButtonPin: v })
+              }
+              pinOwners={pinOwners}
+              ownerKey="Wake-Button"
+            />
+          </Field>
+          <Field label="Trigger-Level">
+            <select
+              value={mainCfg.wakeButtonLevel ?? 0}
+              onChange={(e) =>
+                updateMainConfig(deviceId, {
+                  wakeButtonLevel: parseInt(e.target.value, 10),
+                })
+              }
+              className="mt-1 w-full rounded border border-neutral-300 px-2 py-1 text-sm"
+            >
+              <option value={0}>LOW (Taster nach GND, interner Pull-Up)</option>
+              <option value={1}>HIGH (Taster nach 3.3 V, ext. Pull-Down)</option>
+            </select>
+          </Field>
+        </div>
+        <Hint>
+          Wirkt ab dem nächsten Deep-Sleep. Taster gegen GND ist die
+          einfachste Variante – der ESP konfiguriert intern den Pull-Up.
+        </Hint>
       </SensorSection>
     </div>
   );

@@ -43,6 +43,12 @@ bool RuntimeConfig::load(const String& idToken, const String& deviceId) {
       main.rainEnabled       = fb::readBool  (fields["rainEnabled"], false);
       main.rainPin           = (int)fb::readInteger(fields["rainPin"],
                                                     main.rainPin);
+      main.wakeButtonEnabled = fb::readBool  (fields["wakeButtonEnabled"],
+                                              false);
+      main.wakeButtonPin     = (int)fb::readInteger(fields["wakeButtonPin"],
+                                                    main.wakeButtonPin);
+      main.wakeButtonLevel   = (int)fb::readInteger(fields["wakeButtonLevel"],
+                                                    main.wakeButtonLevel);
     }
   }
 
