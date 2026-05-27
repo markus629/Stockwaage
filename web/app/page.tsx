@@ -11,6 +11,7 @@ import {
 import { onSnapshot } from "firebase/firestore";
 import { auth } from "@/lib/firebase";
 import { devicesCol, type Device } from "@/lib/devices";
+import OnlineDot from "@/components/OnlineDot";
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -108,6 +109,10 @@ export default function Home() {
                   <span className="font-medium">{d.id}</span>
                   <span className="text-xs text-neutral-500">
                     {d.lastSeen ? formatAgo(d.lastSeen) : "—"}
+                    <OnlineDot
+                      lastSeen={d.lastSeen}
+                      intervalSec={d.intervalSec}
+                    />
                   </span>
                 </div>
                 <div className="mt-1 flex gap-4 text-xs text-neutral-500">

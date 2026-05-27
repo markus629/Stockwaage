@@ -28,6 +28,7 @@ import {
 } from "@/lib/devices";
 import CalibrationWizard from "@/components/CalibrationWizard";
 import Dashboard from "@/components/Dashboard";
+import OnlineDot from "@/components/OnlineDot";
 import ScaleCard from "@/components/ScaleCard";
 import SettingsPanel from "@/components/SettingsPanel";
 import { useDeviceTab, useScaleUiPrefs } from "@/lib/uiPrefs";
@@ -178,6 +179,10 @@ function DeviceDetail() {
             <div>
               Zuletzt gesehen:{" "}
               {new Date(device.lastSeen).toLocaleString("de-DE")}
+              <OnlineDot
+                lastSeen={device.lastSeen}
+                intervalSec={device.intervalSec}
+              />
             </div>
           )}
           {device?.vBat !== undefined && (

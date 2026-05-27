@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ALLOWED_I2C_PINS,
   ALLOWED_RAIN_PINS,
@@ -92,7 +92,11 @@ export default function SettingsPanel({
         </div>
       </Section>
 
-      <FirmwareSection deviceId={deviceId} device={device} />
+      <FirmwareSection
+        deviceId={deviceId}
+        device={device}
+        mainCfg={mainCfg}
+      />
 
       <Section
         title="I2C-Bus"
@@ -301,25 +305,57 @@ export default function SettingsPanel({
 function FirmwareSection({
   deviceId,
   device,
+  mainCfg,
 }: {
   deviceId: string;
   device: Device | null;
+  mainCfg: MainConfig;
 }) {
   const current = device?.firmwareVersion;
   const latest = device?.latestFirmwareVersion;
   const url = device?.latestFirmwareUrl;
   const updateAvailable = isNewerVersion(current, latest);
+  const autoUpdate = mainCfg.autoUpdateEnabled ?? false;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [autoStatus, setAutoStatus] = useState<string | null>(null);
+
+  // Auto-Update: command einmal pro neuer Version ausloesen. Der ESP holt
+  // es beim naechsten Wakeup ab; localStorage merkt sich, dass wir fuer
+  // diese Version schon ausgeloest haben (verhindert Spam bei reloads).
+  useEffect(() => {
+    if (!autoUpdate || !updateAvailable || !url || !latest) return;
+    if (typeof window === "undefined") return;
+    const key = `stockwaage.autoupdate.${deviceId}`;
+    const already = window.localStorage.getItem(key);
+    if (already === latest) {
+      setAutoStatus(`Auto-Update für ${latest} wurde bereits beauftragt.`);
+      return;
+    }
+    sendCommand(deviceId, {
+      type: "update",
+      payload: { url, version: latest },
+    })
+      .then(() => {
+        window.localStorage.setItem(key, latest);
+        setAutoStatus(
+          `Auto-Update auf ${latest} beauftragt – wird beim nächsten ` +
+            `ESP-Wakeup installiert.`,
+        );
+      })
+      .catch((e) =>
+        setError(e instanceof Error ? e.message : String(e)),
+      );
+  }, [autoUpdate, updateAvailable, url, latest, deviceId]);
 
   async function triggerUpdate() {
     if (!url || !latest) return;
     if (
       !confirm(
-        `Firmware-Update auf ${latest} starten?\n\n` +
-          `Der ESP lädt die neue Version vom GitHub-Release und startet ` +
-          `neu. Stromversorgung in den nächsten ~2 Minuten nicht ` +
-          `unterbrechen.`,
+        `Firmware-Update auf ${latest} beauftragen?\n\n` +
+          `Der ESP lädt die neue Version beim nächsten Wakeup von ` +
+          `GitHub und startet neu (~1–2 Min). Stromversorgung in der ` +
+          `Zeit nicht unterbrechen.`,
       )
     )
       return;
@@ -330,6 +366,16 @@ function FirmwareSection({
         type: "update",
         payload: { url, version: latest },
       });
+      if (typeof window !== "undefined" && latest) {
+        window.localStorage.setItem(
+          `stockwaage.autoupdate.${deviceId}`,
+          latest,
+        );
+      }
+      setAutoStatus(
+        `Update auf ${latest} beauftragt – wird beim nächsten ESP-Wakeup ` +
+          `installiert.`,
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -353,6 +399,27 @@ function FirmwareSection({
             )}
           </span>
         </div>
+
+        <label className="mt-2 flex items-start gap-2">
+          <input
+            type="checkbox"
+            checked={autoUpdate}
+            onChange={(e) =>
+              updateMainConfig(deviceId, {
+                autoUpdateEnabled: e.target.checked,
+              })
+            }
+            className="mt-1"
+          />
+          <span className="text-sm">
+            Neue Firmware automatisch installieren
+            <span className="mt-0.5 block text-xs text-neutral-500">
+              Sobald ein neues Release auf GitHub erkannt wird, schickt
+              das UI selbst den Update-Auftrag an den ESP.
+            </span>
+          </span>
+        </label>
+
         {updateAvailable && url && (
           <button
             type="button"
@@ -360,16 +427,19 @@ function FirmwareSection({
             disabled={busy}
             className="mt-2 w-full rounded bg-neutral-900 px-3 py-2 text-sm text-white hover:bg-neutral-700 disabled:opacity-50"
           >
-            {busy
-              ? "Auftrag wird gesendet…"
-              : `Auf ${latest} aktualisieren`}
+            {busy ? "Auftrag wird gesendet…" : `Firmware ${latest} installieren`}
           </button>
+        )}
+
+        {autoStatus && (
+          <p className="text-xs text-neutral-600">{autoStatus}</p>
         )}
         {error && <p className="text-xs text-red-700">{error}</p>}
         <p className="text-xs text-neutral-500">
-          ESP prüft beim nächsten Wakeup auf neue Releases. Update wird
-          via OTA von GitHub geladen, dauert ~1–2 Min und startet das
-          Gerät neu.
+          ESP prüft beim nächsten Wakeup auf neue Releases und meldet die
+          gefundene Version. Der Auftrag liegt in Firestore und wird
+          beim nächsten Online-Sein des ESP ausgeführt – das UI muss
+          dafür nicht offen bleiben.
         </p>
       </div>
     </Section>

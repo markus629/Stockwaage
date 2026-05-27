@@ -202,6 +202,18 @@ bool measureAndUpload() {
     latest.ok
       ? "lastSeen,deviceId,vBat,intervalSec,firmwareVersion,latestFirmwareVersion,latestFirmwareUrl"
       : "lastSeen,deviceId,vBat,intervalSec,firmwareVersion");
+
+  // Auto-Update: wenn der User in den Einstellungen aktiviert hat und
+  // GitHub eine neuere Version hat -> jetzt sofort flashen. ESP rebootet
+  // im Erfolgsfall, der Rest der Loop wird uebersprungen.
+  if (cfg.main.autoUpdateEnabled && latest.ok &&
+      updater::isNewer(FIRMWARE_VERSION, latest.version)) {
+    Serial.printf("[auto-update] %s -> %s\n",
+                  FIRMWARE_VERSION, latest.version.c_str());
+    updater::applyUpdate(latest.binUrl);
+    // wenn wir hier landen, ist der Update fehlgeschlagen.
+  }
+
   return true;
 }
 

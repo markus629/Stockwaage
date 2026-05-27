@@ -47,6 +47,8 @@ export type MainConfig = {
   wakeButtonEnabled?: boolean;
   wakeButtonPin?: number;
   wakeButtonLevel?: number;
+  // Firmware auto-update
+  autoUpdateEnabled?: boolean;
 };
 
 // ESP32-S3-WROOM-1 N16R8: SPI-Flash 26-32, Octal-PSRAM 33-37, USB 19/20,

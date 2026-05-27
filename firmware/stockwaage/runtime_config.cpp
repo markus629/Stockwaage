@@ -49,6 +49,8 @@ bool RuntimeConfig::load(const String& idToken, const String& deviceId) {
                                                     main.wakeButtonPin);
       main.wakeButtonLevel   = (int)fb::readInteger(fields["wakeButtonLevel"],
                                                     main.wakeButtonLevel);
+      main.autoUpdateEnabled = fb::readBool  (fields["autoUpdateEnabled"],
+                                              false);
     }
   }
 

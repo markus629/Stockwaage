@@ -32,6 +32,7 @@ struct MainConfig {
   bool     wakeButtonEnabled  = false;
   int      wakeButtonPin      = 5;
   int      wakeButtonLevel    = 0;        // 0 = LOW (Taster nach GND)
+  bool     autoUpdateEnabled  = false;
 };
 
 class RuntimeConfig {
