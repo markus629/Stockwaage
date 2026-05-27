@@ -1,6 +1,7 @@
 #include "commands.h"
 #include "firebase.h"
 #include "sensors.h"
+#include "updater.h"
 #include <ArduinoJson.h>
 #include <math.h>
 
@@ -127,6 +128,23 @@ bool processPending(const String& idToken, const String& deviceId,
     }
     else if (type == "reload") {
       ok = true; // schon dadurch, dass wir hier sind
+    }
+    else if (type == "update") {
+      String url = fb::readString(payload["url"]);
+      if (url.length() == 0) { err = "no url in payload"; }
+      else {
+        // markiere "done" BEVOR wir flashen, sonst loopen wir bei
+        // erfolgreichem Reboot in den gleichen Command rein.
+        markDone(idToken, deviceId, cmdId, "done");
+        if (mainDirty) cfg.saveMain(idToken, deviceId);
+        for (int i = 0; i < NUM_SCALES; i++) {
+          if (scaleDirty[i]) cfg.saveScale(idToken, deviceId, i);
+        }
+        Serial.println("[cmd] update -> applyUpdate (rebootet bei Erfolg)");
+        updater::applyUpdate(url);
+        // Falls applyUpdate returnt, ist das ein Fehler.
+        return false;
+      }
     }
     else {
       err = String("unknown type: ") + type;

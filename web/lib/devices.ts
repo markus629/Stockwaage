@@ -18,6 +18,9 @@ export type Device = {
   lastSeen?: number;
   vBat?: number;
   intervalSec?: number;
+  firmwareVersion?: string;
+  latestFirmwareVersion?: string;
+  latestFirmwareUrl?: string;
 };
 
 export type MainConfig = {
@@ -93,7 +96,8 @@ export type CommandType =
   | "calibrate"
   | "setTempCoef"
   | "stayAwake"
-  | "reload";
+  | "reload"
+  | "update";
 
 export type Command = {
   id: string;
@@ -105,6 +109,20 @@ export type Command = {
   createdAt: number;
   processedAt?: number;
 };
+
+// Vergleicht Semver-Strings (mit fuehrendem 'v' optional). "dev" gilt als
+// aelter -> Updates immer erlaubt. Identisch zur Firmware-Logik.
+export function isNewerVersion(local?: string, remote?: string): boolean {
+  if (!remote) return false;
+  if (!local || local === "dev") return true;
+  const parse = (v: string) =>
+    v.replace(/^v/i, "").split(/[.\-]/).slice(0, 3).map((n) => parseInt(n, 10) || 0);
+  const [la, lb, lc] = parse(local);
+  const [ra, rb, rc] = parse(remote);
+  if (ra !== la) return ra > la;
+  if (rb !== lb) return rb > lb;
+  return rc > lc;
+}
 
 // ----- Firestore paths ------------------------------------------------------
 

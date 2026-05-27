@@ -12,6 +12,15 @@
 #define FIREBASE_EMAIL      "markus@strogg.de"
 #define OWNER_UID           "F1k284u9bmbJcOkEqt7O8BNOLN53"
 
+// ----- Firmware Version + Update --------------------------------------------
+// FIRMWARE_VERSION wird beim CI-Build aus dem Git-Tag gesetzt (-D Flag).
+// Lokale Arduino-IDE-Builds laufen ohne und zeigen "dev".
+#ifndef FIRMWARE_VERSION
+#define FIRMWARE_VERSION    "dev"
+#endif
+#define GITHUB_RELEASES_URL \
+  "https://api.github.com/repos/markus629/Stockwaage/releases/latest"
+
 // ----- Hardware Pin-Belegung (ESP32-S3-WROOM-1 N16R8) -----------------------
 // Reserviert vom Chip/Modul: 19,20 (USB), 26-32 (SPI Flash), 33-37 (Octal
 // PSRAM), 43,44 (UART0). Strapping: 0,3,45,46. Onboard NeoPixel: 48.

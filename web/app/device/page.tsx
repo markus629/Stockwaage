@@ -261,6 +261,7 @@ function DeviceDetail() {
       {tab === "settings" && (
         <SettingsPanel
           deviceId={deviceId}
+          device={device}
           mainCfg={mainCfg}
           latest={latest}
           intervalSecFallback={device?.intervalSec}

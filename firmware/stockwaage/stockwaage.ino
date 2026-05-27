@@ -18,6 +18,7 @@
 #include "sensors.h"
 #include "runtime_config.h"
 #include "commands.h"
+#include "updater.h"
 
 // ----- State (ueberlebt Deep Sleep) -----------------------------------------
 RTC_DATA_ATTR int     bootCount = 0;
@@ -161,17 +162,28 @@ bool measureAndUpload() {
                  + "/readings/" + String((unsigned long long)tsMs);
   if (!fb::patchDoc(idToken, docPath, body)) return false;
 
-  // 3) Heartbeat
-  DynamicJsonDocument hb(512);
+  // 3) Heartbeat (inkl. latest-Firmware-Check von GitHub)
+  updater::LatestInfo latest = updater::fetchLatest();
+
+  DynamicJsonDocument hb(1024);
   JsonObject hbf = hb.createNestedObject("fields");
-  fb::writeInteger(hbf, "lastSeen",    (long long)tsMs);
-  fb::writeString (hbf, "deviceId",    deviceId);
-  fb::writeNumber (hbf, "vBat",        vBat);
-  fb::writeInteger(hbf, "intervalSec", cfg.main.intervalSec);
+  fb::writeInteger(hbf, "lastSeen",        (long long)tsMs);
+  fb::writeString (hbf, "deviceId",        deviceId);
+  fb::writeNumber (hbf, "vBat",            vBat);
+  fb::writeInteger(hbf, "intervalSec",     cfg.main.intervalSec);
+  fb::writeString (hbf, "firmwareVersion", FIRMWARE_VERSION);
+  if (latest.ok) {
+    fb::writeString(hbf, "latestFirmwareVersion", latest.version);
+    fb::writeString(hbf, "latestFirmwareUrl",     latest.binUrl);
+  }
   String hbBody;
   serializeJson(hb, hbBody);
-  fb::patchDoc(idToken, String("users/") + OWNER_UID + "/devices/" + deviceId,
-               hbBody, "lastSeen,deviceId,vBat,intervalSec");
+  fb::patchDoc(
+    idToken, String("users/") + OWNER_UID + "/devices/" + deviceId,
+    hbBody,
+    latest.ok
+      ? "lastSeen,deviceId,vBat,intervalSec,firmwareVersion,latestFirmwareVersion,latestFirmwareUrl"
+      : "lastSeen,deviceId,vBat,intervalSec,firmwareVersion");
   return true;
 }
 

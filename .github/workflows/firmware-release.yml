@@ -1,0 +1,97 @@
+name: Firmware Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag-Name (z.B. v0.2.0). Wird als FIRMWARE_VERSION genutzt."
+        required: true
+        default: "v0.0.0-manual"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # fuer Release-Erstellung
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine version
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup arduino-cli
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Configure board indexes
+        run: |
+          arduino-cli config init --overwrite
+          arduino-cli config add board_manager.additional_urls \
+            https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli core update-index
+
+      - name: Cache ESP32 core
+        uses: actions/cache@v4
+        with:
+          path: ~/.arduino15
+          key: arduino-esp32-${{ runner.os }}-v3.3.8
+
+      - name: Install ESP32 core
+        run: arduino-cli core install esp32:esp32@3.3.8
+
+      - name: Install libraries
+        run: |
+          arduino-cli lib install \
+            "ArduinoJson" \
+            "HX711 Arduino Library" \
+            "WiFiManager" \
+            "Adafruit BME280 Library" \
+            "Adafruit INA219" \
+            "Adafruit Unified Sensor"
+
+      - name: Compile
+        run: |
+          mkdir -p build
+          arduino-cli compile \
+            --fqbn "esp32:esp32:esp32s3:PSRAM=opi,FlashSize=16M,PartitionScheme=custom" \
+            --build-property 'compiler.cpp.extra_flags=-DFIRMWARE_VERSION="${{ steps.ver.outputs.version }}"' \
+            --output-dir build \
+            firmware/stockwaage
+
+      - name: Stage release artifacts
+        run: |
+          mkdir -p release
+          cp build/stockwaage.ino.bin           release/stockwaage-${{ steps.ver.outputs.version }}.bin
+          cp build/stockwaage.ino.bootloader.bin release/bootloader.bin
+          cp build/stockwaage.ino.partitions.bin release/partitions.bin
+
+      - name: Create / update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.version }}
+          name: ${{ steps.ver.outputs.version }}
+          generate_release_notes: true
+          files: |
+            release/stockwaage-${{ steps.ver.outputs.version }}.bin
+            release/bootloader.bin
+            release/partitions.bin
+          body: |
+            ## OTA-Update
+            Im Web-UI unter **Einstellungen → Firmware** erscheint
+            automatisch ein „Auf ${{ steps.ver.outputs.version }} aktualisieren"-Button,
+            sobald der ESP einmal aufgewacht ist und die neue Version
+            entdeckt hat.
+
+            ## Erst-Flash (oder Recovery)
+            Drei Dateien mit folgenden Adressen flashen
+            (esptool.py oder Web-Flasher):
+            - `bootloader.bin` → `0x0`
+            - `partitions.bin` → `0x8000`
+            - `stockwaage-${{ steps.ver.outputs.version }}.bin` → `0x10000`

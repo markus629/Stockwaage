@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   ALLOWED_I2C_PINS,
   ALLOWED_RAIN_PINS,
@@ -11,7 +12,10 @@ import {
   DEFAULT_I2C_SDA,
   DEFAULT_RAIN_PIN,
   INA219_ADDRS,
+  isNewerVersion,
+  sendCommand,
   updateMainConfig,
+  type Device,
   type MainConfig,
   type Reading,
 } from "@/lib/devices";
@@ -22,6 +26,7 @@ const DAYS_MAX = 30;
 
 type Props = {
   deviceId: string;
+  device: Device | null;
   mainCfg: MainConfig;
   latest: Reading | null;
   intervalSecFallback?: number;
@@ -37,6 +42,7 @@ function hex(n: number | undefined): string {
 
 export default function SettingsPanel({
   deviceId,
+  device,
   mainCfg,
   latest,
   intervalSecFallback,
@@ -83,6 +89,8 @@ export default function SettingsPanel({
           </Field>
         </div>
       </Section>
+
+      <FirmwareSection deviceId={deviceId} device={device} />
 
       <Section
         title="I2C-Bus"
@@ -235,6 +243,84 @@ export default function SettingsPanel({
         </Field>
       </SensorSection>
     </div>
+  );
+}
+
+function FirmwareSection({
+  deviceId,
+  device,
+}: {
+  deviceId: string;
+  device: Device | null;
+}) {
+  const current = device?.firmwareVersion;
+  const latest = device?.latestFirmwareVersion;
+  const url = device?.latestFirmwareUrl;
+  const updateAvailable = isNewerVersion(current, latest);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function triggerUpdate() {
+    if (!url || !latest) return;
+    if (
+      !confirm(
+        `Firmware-Update auf ${latest} starten?\n\n` +
+          `Der ESP lädt die neue Version vom GitHub-Release und startet ` +
+          `neu. Stromversorgung in den nächsten ~2 Minuten nicht ` +
+          `unterbrechen.`,
+      )
+    )
+      return;
+    setBusy(true);
+    setError(null);
+    try {
+      await sendCommand(deviceId, {
+        type: "update",
+        payload: { url, version: latest },
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Section title="Firmware">
+      <div className="grid gap-2 text-sm">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-neutral-500">Installiert</span>
+          <span className="font-mono">{current ?? "—"}</span>
+        </div>
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-neutral-500">Neueste auf GitHub</span>
+          <span className="font-mono">
+            {latest ?? "—"}
+            {latest && !updateAvailable && current && (
+              <span className="ml-2 text-xs text-green-700">✓ aktuell</span>
+            )}
+          </span>
+        </div>
+        {updateAvailable && url && (
+          <button
+            type="button"
+            onClick={triggerUpdate}
+            disabled={busy}
+            className="mt-2 w-full rounded bg-neutral-900 px-3 py-2 text-sm text-white hover:bg-neutral-700 disabled:opacity-50"
+          >
+            {busy
+              ? "Auftrag wird gesendet…"
+              : `Auf ${latest} aktualisieren`}
+          </button>
+        )}
+        {error && <p className="text-xs text-red-700">{error}</p>}
+        <p className="text-xs text-neutral-500">
+          ESP prüft beim nächsten Wakeup auf neue Releases. Update wird
+          via OTA von GitHub geladen, dauert ~1–2 Min und startet das
+          Gerät neu.
+        </p>
+      </div>
+    </Section>
   );
 }
 
