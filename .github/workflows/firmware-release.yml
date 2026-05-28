@@ -1,31 +1,27 @@
 name: Firmware Release
 
+# Baut bei jedem Push, der firmware/ aendert, automatisch eine neue
+# Binary und veroeffentlicht sie als GitHub-Release v0.1.<build-nummer>.
+# ESPs mit aktiviertem Auto-Update ziehen sie beim naechsten Wakeup.
 on:
   push:
-    tags: ["v*"]
+    branches: [main, "claude/**"]
+    paths:
+      - "firmware/**"
+      - ".github/workflows/firmware-release.yml"
   workflow_dispatch:
-    inputs:
-      tag:
-        description: "Tag-Name (z.B. v0.2.0). Wird als FIRMWARE_VERSION genutzt."
-        required: true
-        default: "v0.0.0-manual"
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # fuer Release-Erstellung
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
       - name: Determine version
         id: ver
-        run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          else
-            echo "version=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
-          fi
+        run: echo "version=v0.1.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
 
       - name: Setup arduino-cli
         uses: arduino/setup-arduino-cli@v2
@@ -68,11 +64,11 @@ jobs:
       - name: Stage release artifacts
         run: |
           mkdir -p release
-          cp build/stockwaage.ino.bin           release/stockwaage-${{ steps.ver.outputs.version }}.bin
+          cp build/stockwaage.ino.bin            release/stockwaage-${{ steps.ver.outputs.version }}.bin
           cp build/stockwaage.ino.bootloader.bin release/bootloader.bin
           cp build/stockwaage.ino.partitions.bin release/partitions.bin
 
-      - name: Create / update release
+      - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.version }}
@@ -83,11 +79,12 @@ jobs:
             release/bootloader.bin
             release/partitions.bin
           body: |
+            Automatischer Build von Commit ${{ github.sha }}.
+
             ## OTA-Update
-            Im Web-UI unter **Einstellungen → Firmware** erscheint
-            automatisch ein „Auf ${{ steps.ver.outputs.version }} aktualisieren"-Button,
-            sobald der ESP einmal aufgewacht ist und die neue Version
-            entdeckt hat.
+            Wird im Web-UI unter **Einstellungen → Firmware** als
+            ${{ steps.ver.outputs.version }} angeboten (bzw. automatisch
+            installiert, wenn Auto-Update aktiv ist).
 
             ## Erst-Flash (oder Recovery)
             Drei Dateien mit folgenden Adressen flashen
