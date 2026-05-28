@@ -28,6 +28,7 @@ import {
 } from "@/lib/devices";
 import CalibrationWizard from "@/components/CalibrationWizard";
 import Dashboard from "@/components/Dashboard";
+import LongTermView from "@/components/LongTermView";
 import OnlineDot from "@/components/OnlineDot";
 import ScaleCard from "@/components/ScaleCard";
 import SettingsPanel from "@/components/SettingsPanel";
@@ -205,6 +206,9 @@ function DeviceDetail() {
             ({scaleIds.length})
           </span>
         </TopTab>
+        <TopTab active={tab === "longterm"} onClick={() => setTab("longterm")}>
+          Langzeit
+        </TopTab>
         <TopTab
           active={tab === "settings"}
           onClick={() => setTab("settings")}
@@ -261,6 +265,14 @@ function DeviceDetail() {
             </button>
           )}
         </section>
+      )}
+
+      {tab === "longterm" && (
+        <LongTermView
+          deviceId={deviceId}
+          scales={scales}
+          scaleIds={scaleIds}
+        />
       )}
 
       {tab === "settings" && (

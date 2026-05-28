@@ -21,6 +21,7 @@
 #include "runtime_config.h"
 #include "commands.h"
 #include "updater.h"
+#include "daily_stats.h"
 
 // ----- State (ueberlebt Deep Sleep) -----------------------------------------
 RTC_DATA_ATTR int     bootCount = 0;
@@ -121,6 +122,11 @@ bool ensureWiFi(bool forcePortal) {
 
 bool syncTime() {
   configTime(0, 0, "pool.ntp.org", "time.cloudflare.com");
+  // Lokale Zeitzone (Deutschland) fuer den Tages-Key der dailyStats.
+  // time(nullptr) bleibt UTC-Epoch (fuer reading-ts), nur localtime()
+  // liefert dann CET/CEST.
+  setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
+  tzset();
   struct tm tm;
   return getLocalTime(&tm, 5000);
 }
@@ -159,13 +165,16 @@ bool measureAndUpload() {
   const double ambientC = env.tempC;
 
   // scales: { s1: { raw, kg }, ... } als verschachtelte Map
+  double kgScales[NUM_SCALES];
   JsonObject scalesFields = fields.createNestedObject("scales")
                                   .createNestedObject("mapValue")
                                   .createNestedObject("fields");
   for (int i = 0; i < NUM_SCALES; i++) {
+    kgScales[i] = NAN;
     if (isnan(rawScales[i])) continue;
     double kg = isnan(ambientC) ? NAN
                                 : cfg.computeKg(i, rawScales[i], ambientC);
+    kgScales[i] = kg;
     JsonObject scaleEntry = scalesFields.createNestedObject(scaleId(i).c_str())
                                         .createNestedObject("mapValue")
                                         .createNestedObject("fields");
@@ -179,6 +188,16 @@ bool measureAndUpload() {
   String docPath = String("users/") + OWNER_UID + "/devices/" + deviceId
                  + "/readings/" + String((unsigned long long)tsMs);
   if (!fb::patchDoc(idToken, docPath, body)) return false;
+
+  // 2b) Tages-Aggregat fortschreiben (fuer den Langzeit-Graph).
+  {
+    time_t now = time(nullptr);
+    struct tm lt;
+    localtime_r(&now, &lt);
+    char dayKey[11];
+    strftime(dayKey, sizeof(dayKey), "%Y-%m-%d", &lt);
+    daily::update(idToken, deviceId, String(dayKey), kgScales, env);
+  }
 
   // 3) Heartbeat (inkl. latest-Firmware-Check von GitHub)
   updater::LatestInfo latest = updater::fetchLatest();

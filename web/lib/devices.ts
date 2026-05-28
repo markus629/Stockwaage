@@ -105,6 +105,23 @@ export type Reading = {
   scales: Record<string, ScaleReading>;
 };
 
+// Aggregat einer Metrik (Waage oder Sensor) ueber einen Tag.
+export type MetricAgg = {
+  sum: number;
+  count: number;
+  min: number;
+  max: number;
+  last: number;
+};
+
+// Ein Tages-Aggregat-Dokument (dailyStats/{YYYY-MM-DD}).
+export type DailyStat = {
+  date: string; // "YYYY-MM-DD"
+  scales: Record<string, MetricAgg>;
+  tempC?: MetricAgg;
+  humidity?: MetricAgg;
+};
+
 export type CommandStatus = "pending" | "done" | "error";
 export type CommandType =
   | "tare"
@@ -178,6 +195,8 @@ export const readingsCol = (id: string) =>
   collection(db, ...devicePath(id), "readings");
 export const commandsCol = (id: string) =>
   collection(db, ...devicePath(id), "commands");
+export const dailyStatsCol = (id: string) =>
+  collection(db, ...devicePath(id), "dailyStats");
 
 // ----- Helpers --------------------------------------------------------------
 
