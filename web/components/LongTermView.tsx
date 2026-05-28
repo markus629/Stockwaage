@@ -8,12 +8,14 @@ import {
   ComposedChart,
   Line,
   ResponsiveContainer,
+  Scatter,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 import {
   dailyStatsCol,
+  type Comment,
   type DailyStat,
   type ScaleConfig,
 } from "@/lib/devices";
@@ -22,6 +24,7 @@ type Props = {
   deviceId: string;
   scales: Record<string, ScaleConfig>;
   scaleIds: string[];
+  comments: Comment[];
 };
 
 type RangeOption = { label: string; days: number | "all" };
@@ -41,12 +44,15 @@ type ChartPoint = {
   range: [number, number];
   label: string;
   days: number;
+  comments?: Comment[];
+  commentY?: number;
 };
 
 function buildBuckets(
   stats: DailyStat[],
   scaleId: string,
   rangeDays: number | "all",
+  comments: Comment[],
 ): ChartPoint[] {
   let rows = stats
     .map((s) => ({ date: s.date, agg: s.scales?.[scaleId] }))
@@ -84,6 +90,23 @@ function buildBuckets(
       days: slice.length,
     });
   }
+
+  // Kommentare dem zeitlich passenden Bucket zuordnen (Cluster). Jeder
+  // Kommentar landet beim letzten Bucket dessen Start <= comment.ts.
+  const scaleComments = comments
+    .filter((c) => c.scaleId === scaleId)
+    .sort((a, b) => a.ts - b.ts);
+  for (const c of scaleComments) {
+    let target: ChartPoint | null = null;
+    for (const b of out) {
+      if (b.ts <= c.ts) target = b;
+      else break;
+    }
+    if (!target) target = out[0];
+    if (!target) continue;
+    (target.comments ??= []).push(c);
+    target.commentY = target.avg;
+  }
   return out;
 }
 
@@ -92,11 +115,19 @@ function fmtDate(iso: string): string {
   return `${d}.${m}.${y.slice(2)}`;
 }
 
-export default function LongTermView({ deviceId, scales, scaleIds }: Props) {
+export default function LongTermView({
+  deviceId,
+  scales,
+  scaleIds,
+  comments,
+}: Props) {
   const [stats, setStats] = useState<DailyStat[]>([]);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<number | "all">(90);
   const [scaleId, setScaleId] = useState<string>("");
+  const [popup, setPopup] = useState<{ label: string; items: Comment[] } | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!deviceId) return;
@@ -112,8 +143,8 @@ export default function LongTermView({ deviceId, scales, scaleIds }: Props) {
   const effectiveScale = scaleId || scaleIds[0] || "";
 
   const data = useMemo(
-    () => buildBuckets(stats, effectiveScale, range),
-    [stats, effectiveScale, range],
+    () => buildBuckets(stats, effectiveScale, range, comments),
+    [stats, effectiveScale, range, comments],
   );
 
   const bucketDays = data.length > 0 ? data[0].days : 1;
@@ -226,11 +257,90 @@ export default function LongTermView({ deviceId, scales, scaleIds }: Props) {
                   dot={false}
                   isAnimationActive={false}
                 />
+                <Scatter
+                  dataKey="commentY"
+                  shape={<CommentDot />}
+                  isAnimationActive={false}
+                  onClick={(p: { payload?: ChartPoint }) => {
+                    const items = p?.payload?.comments;
+                    if (items?.length) {
+                      setPopup({ label: p.payload!.label, items });
+                    }
+                  }}
+                />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
         )}
       </div>
+
+      {popup && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+          onClick={() => setPopup(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-lg bg-white p-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-2 flex items-center justify-between">
+              <h4 className="text-sm font-semibold">Logbuch · {popup.label}</h4>
+              <button
+                type="button"
+                onClick={() => setPopup(null)}
+                className="text-neutral-500 hover:text-neutral-900"
+              >
+                ✕
+              </button>
+            </div>
+            <ul className="space-y-1.5 text-sm">
+              {[...popup.items]
+                .sort((a, b) => b.ts - a.ts)
+                .map((c) => (
+                  <li key={c.id} className="border-b border-neutral-100 pb-1.5 last:border-0">
+                    <span className="block font-mono text-xs text-neutral-500">
+                      {new Date(c.ts).toLocaleString("de-DE", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                    {c.text}
+                  </li>
+                ))}
+            </ul>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+function CommentDot(props: {
+  cx?: number;
+  cy?: number;
+  payload?: ChartPoint;
+}) {
+  const { cx, cy, payload } = props;
+  if (cx == null || cy == null || !payload?.comments?.length) return null;
+  const n = payload.comments.length;
+  return (
+    <g style={{ cursor: "pointer" }}>
+      <circle cx={cx} cy={cy} r={7} fill="#f59e0b" stroke="#fff" strokeWidth={2} />
+      {n > 1 && (
+        <text
+          x={cx}
+          y={cy + 3}
+          textAnchor="middle"
+          fontSize={9}
+          fontWeight="bold"
+          fill="#fff"
+        >
+          {n}
+        </text>
+      )}
+    </g>
   );
 }

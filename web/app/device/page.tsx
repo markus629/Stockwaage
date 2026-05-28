@@ -14,6 +14,7 @@ import { onAuthStateChanged, type User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import {
   addScale,
+  commentsCol,
   computePinOwners,
   deviceDoc,
   mainConfigDoc,
@@ -21,6 +22,7 @@ import {
   readingsCol,
   removeScale,
   scalesCol,
+  type Comment,
   type Device,
   type MainConfig,
   type Reading,
@@ -77,6 +79,7 @@ function DeviceDetail() {
   const [scales, setScales] = useState<Record<string, ScaleConfig>>({});
   const [latest, setLatest] = useState<Reading | null>(null);
   const [windowReadings, setWindowReadings] = useState<Reading[]>([]);
+  const [comments, setComments] = useState<Comment[]>([]);
   const [wizardFor, setWizardFor] = useState<string | null>(null);
   const [days, setDays] = useState<number>(DAYS_DEFAULT);
   const uiPrefs = useScaleUiPrefs(deviceId);
@@ -110,6 +113,13 @@ function DeviceDetail() {
       onSnapshot(
         query(readingsCol(deviceId), orderBy("ts", "desc"), limit(1)),
         (snap) => setLatest((snap.docs[0]?.data() as Reading) ?? null),
+      ),
+    );
+    unsubs.push(
+      onSnapshot(commentsCol(deviceId), (snap) =>
+        setComments(
+          snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Comment),
+        ),
       ),
     );
     return () => unsubs.forEach((u) => u());
@@ -239,6 +249,7 @@ function DeviceDetail() {
                 readings={windowReadings}
                 prefs={uiPrefs.get(sid)}
                 pinOwners={pinOwners}
+                comments={comments.filter((c) => c.scaleId === sid)}
                 onPrefsChange={(patch) => uiPrefs.set(sid, patch)}
                 onCalibrate={() => setWizardFor(sid)}
                 onDelete={() => removeScale(deviceId, sid)}
@@ -272,6 +283,7 @@ function DeviceDetail() {
           deviceId={deviceId}
           scales={scales}
           scaleIds={scaleIds}
+          comments={comments}
         />
       )}
 

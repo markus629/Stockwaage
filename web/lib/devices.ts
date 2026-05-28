@@ -142,6 +142,15 @@ export type Command = {
   processedAt?: number;
 };
 
+// Imker-Logbuch-Eintrag zu einer Waage (z.B. "Honig entnommen").
+export type Comment = {
+  id: string;
+  scaleId: string;
+  text: string;
+  ts: number; // Ereignis-Zeitpunkt, erscheint als Marker im Langzeit-Graph
+  createdAt: number;
+};
+
 // Vergleicht Semver-Strings (mit fuehrendem 'v' optional). "dev" gilt als
 // aelter -> Updates immer erlaubt. Identisch zur Firmware-Logik.
 export function isNewerVersion(local?: string, remote?: string): boolean {
@@ -197,6 +206,10 @@ export const commandsCol = (id: string) =>
   collection(db, ...devicePath(id), "commands");
 export const dailyStatsCol = (id: string) =>
   collection(db, ...devicePath(id), "dailyStats");
+export const commentsCol = (id: string) =>
+  collection(db, ...devicePath(id), "comments");
+export const commentDoc = (id: string, commentId: string) =>
+  doc(db, ...devicePath(id), "comments", commentId);
 
 // ----- Helpers --------------------------------------------------------------
 
@@ -261,6 +274,35 @@ export async function removeScale(
   scaleId: string,
 ): Promise<void> {
   await deleteDoc(scaleDoc(deviceId, scaleId));
+}
+
+export async function addComment(
+  deviceId: string,
+  scaleId: string,
+  text: string,
+  ts: number = Date.now(),
+): Promise<void> {
+  await addDoc(commentsCol(deviceId), {
+    scaleId,
+    text,
+    ts,
+    createdAt: Date.now(),
+  });
+}
+
+export async function updateComment(
+  deviceId: string,
+  commentId: string,
+  text: string,
+): Promise<void> {
+  await updateDoc(commentDoc(deviceId, commentId), { text });
+}
+
+export async function deleteComment(
+  deviceId: string,
+  commentId: string,
+): Promise<void> {
+  await deleteDoc(commentDoc(deviceId, commentId));
 }
 
 // Sammelt alle in der Config belegten GPIO-Pins inkl. System-Pins.

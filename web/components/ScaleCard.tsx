@@ -4,11 +4,13 @@ import {
   ALLOWED_DT_PINS,
   DEFAULT_DT_PIN,
   updateScaleConfig,
+  type Comment,
   type Reading,
   type ScaleConfig,
   type ScaleReading,
 } from "@/lib/devices";
 import type { ConfigTab, ScaleUiPrefs } from "@/lib/uiPrefs";
+import CommentsSection from "./CommentsSection";
 import DailyChangeChart from "./DailyChangeChart";
 import LearningPhase from "./LearningPhase";
 import PinSelect from "./PinSelect";
@@ -22,6 +24,7 @@ type Props = {
   readings: Reading[];
   prefs: ScaleUiPrefs;
   pinOwners: Record<number, string>;
+  comments: Comment[];
   onPrefsChange: (patch: Partial<ScaleUiPrefs>) => void;
   onCalibrate: () => void;
   onDelete: () => void;
@@ -67,6 +70,7 @@ export default function ScaleCard({
   readings,
   prefs,
   pinOwners,
+  comments,
   onPrefsChange,
   onCalibrate,
   onDelete,
@@ -202,6 +206,11 @@ export default function ScaleCard({
 
           <ScaleChart scaleId={scaleId} readings={readings} />
           <DailyChangeChart scaleId={scaleId} readings={readings} />
+          <CommentsSection
+            deviceId={deviceId}
+            scaleId={scaleId}
+            comments={comments}
+          />
         </div>
       )}
     </li>
