@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   ALLOWED_DT_PINS,
   DEFAULT_DT_PIN,
@@ -27,7 +28,7 @@ type Props = {
   comments: Comment[];
   onPrefsChange: (patch: Partial<ScaleUiPrefs>) => void;
   onCalibrate: () => void;
-  onDelete: () => void;
+  onDelete: () => void | Promise<void>;
 };
 
 function Chevron({ open }: { open: boolean }) {
@@ -75,6 +76,7 @@ export default function ScaleCard({
   onCalibrate,
   onDelete,
 }: Props) {
+  const [deleting, setDeleting] = useState(false);
   const calibrated = (cfg.scaleFactor ?? 0) !== 0;
   const weightLabel =
     reading?.kg !== undefined
@@ -82,6 +84,32 @@ export default function ScaleCard({
       : calibrated
         ? "—"
         : "nicht kalibriert";
+
+  async function handleDelete() {
+    const name = cfg.name || scaleId;
+    if (
+      !confirm(
+        `Waage „${name}" wirklich löschen?\n\n` +
+          `Dabei werden UNWIDERRUFLICH gelöscht:\n` +
+          `• alle Messwerte dieser Waage (Verlauf + Tagesdaten)\n` +
+          `• alle Logbuch-Kommentare dieser Waage\n` +
+          `• die Kalibrierung & Pin-Konfiguration\n\n` +
+          `Andere Waagen bleiben unberührt. Bei vielen Messwerten kann ` +
+          `das einige Sekunden dauern.`,
+      )
+    )
+      return;
+    setDeleting(true);
+    try {
+      await onDelete();
+    } catch (e) {
+      alert(
+        "Löschen fehlgeschlagen: " +
+          (e instanceof Error ? e.message : String(e)),
+      );
+      setDeleting(false);
+    }
+  }
 
   return (
     <li className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
@@ -141,22 +169,36 @@ export default function ScaleCard({
         <button
           type="button"
           aria-label={`Waage ${scaleId} löschen`}
+          disabled={deleting}
           onClick={(e) => {
             e.stopPropagation();
-            if (
-              confirm(
-                `Waage ${cfg.name || scaleId} wirklich entfernen?\n\n` +
-                  `Historische Messwerte bleiben in Firestore erhalten.`,
-              )
-            ) {
-              onDelete();
-            }
+            handleDelete();
           }}
-          className="rounded p-1 text-neutral-400 hover:bg-red-50 hover:text-red-600"
+          className="rounded p-1 text-neutral-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
         >
-          <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M5 9h10v2H5z" />
-          </svg>
+          {deleting ? (
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 20 20"
+              className="animate-spin"
+              fill="none"
+            >
+              <circle
+                cx="10"
+                cy="10"
+                r="7"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeDasharray="33"
+                strokeLinecap="round"
+              />
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M5 9h10v2H5z" />
+            </svg>
+          )}
         </button>
       </div>
 

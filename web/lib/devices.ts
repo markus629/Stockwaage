@@ -4,9 +4,14 @@ import {
   deleteDoc,
   deleteField,
   doc,
+  getDocs,
+  query,
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
+  writeBatch,
+  type DocumentReference,
 } from "firebase/firestore";
 import { db, ownerUid } from "./firebase";
 
@@ -269,10 +274,56 @@ export async function addScale(
   return nextSlot;
 }
 
+// Firestore-Batch-Limit ist 500 Ops; etwas Reserve lassen.
+const BATCH_SIZE = 450;
+
+async function deleteRefsInBatches(refs: DocumentReference[]): Promise<void> {
+  for (let i = 0; i < refs.length; i += BATCH_SIZE) {
+    const batch = writeBatch(db);
+    for (const ref of refs.slice(i, i + BATCH_SIZE)) batch.delete(ref);
+    await batch.commit();
+  }
+}
+
+async function dropScaleFieldInBatches(
+  refs: DocumentReference[],
+  scaleId: string,
+): Promise<void> {
+  const patch = { [`scales.${scaleId}`]: deleteField() };
+  for (let i = 0; i < refs.length; i += BATCH_SIZE) {
+    const batch = writeBatch(db);
+    for (const ref of refs.slice(i, i + BATCH_SIZE)) batch.update(ref, patch);
+    await batch.commit();
+  }
+}
+
+// Loescht eine Waage vollstaendig: Konfiguration, alle Kommentare und das
+// scales.<sid>-Feld aus saemtlichen readings + dailyStats. Unwiderruflich.
 export async function removeScale(
   deviceId: string,
   scaleId: string,
 ): Promise<void> {
+  // 1) Kommentare dieser Waage (eigene Dokumente).
+  const cs = await getDocs(
+    query(commentsCol(deviceId), where("scaleId", "==", scaleId)),
+  );
+  await deleteRefsInBatches(cs.docs.map((d) => d.ref));
+
+  // 2) scales.<sid> aus allen readings entfernen (geteilte Dokumente).
+  const rs = await getDocs(readingsCol(deviceId));
+  await dropScaleFieldInBatches(
+    rs.docs.map((d) => d.ref),
+    scaleId,
+  );
+
+  // 3) scales.<sid> aus allen Tages-Aggregaten entfernen.
+  const ds = await getDocs(dailyStatsCol(deviceId));
+  await dropScaleFieldInBatches(
+    ds.docs.map((d) => d.ref),
+    scaleId,
+  );
+
+  // 4) Konfigurations-Dokument der Waage.
   await deleteDoc(scaleDoc(deviceId, scaleId));
 }
 
