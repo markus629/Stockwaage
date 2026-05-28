@@ -16,6 +16,7 @@ import {
   addScale,
   commentsCol,
   computePinOwners,
+  dailyStatsCol,
   deviceDoc,
   mainConfigDoc,
   MAX_SCALES,
@@ -23,6 +24,7 @@ import {
   removeScale,
   scalesCol,
   type Comment,
+  type DailyStat,
   type Device,
   type MainConfig,
   type Reading,
@@ -30,7 +32,6 @@ import {
 } from "@/lib/devices";
 import CalibrationWizard from "@/components/CalibrationWizard";
 import Dashboard from "@/components/Dashboard";
-import LongTermView from "@/components/LongTermView";
 import OnlineDot from "@/components/OnlineDot";
 import ScaleCard from "@/components/ScaleCard";
 import SettingsPanel from "@/components/SettingsPanel";
@@ -80,6 +81,7 @@ function DeviceDetail() {
   const [latest, setLatest] = useState<Reading | null>(null);
   const [windowReadings, setWindowReadings] = useState<Reading[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
+  const [dailyStats, setDailyStats] = useState<DailyStat[]>([]);
   const [wizardFor, setWizardFor] = useState<string | null>(null);
   const [days, setDays] = useState<number>(DAYS_DEFAULT);
   const uiPrefs = useScaleUiPrefs(deviceId);
@@ -120,6 +122,12 @@ function DeviceDetail() {
         setComments(
           snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Comment),
         ),
+      ),
+    );
+    unsubs.push(
+      onSnapshot(
+        query(dailyStatsCol(deviceId), orderBy("date", "asc")),
+        (snap) => setDailyStats(snap.docs.map((d) => d.data() as DailyStat)),
       ),
     );
     return () => unsubs.forEach((u) => u());
@@ -216,9 +224,6 @@ function DeviceDetail() {
             ({scaleIds.length})
           </span>
         </TopTab>
-        <TopTab active={tab === "longterm"} onClick={() => setTab("longterm")}>
-          Langzeit
-        </TopTab>
         <TopTab
           active={tab === "settings"}
           onClick={() => setTab("settings")}
@@ -250,6 +255,7 @@ function DeviceDetail() {
                 prefs={uiPrefs.get(sid)}
                 pinOwners={pinOwners}
                 comments={comments.filter((c) => c.scaleId === sid)}
+                dailyStats={dailyStats}
                 onPrefsChange={(patch) => uiPrefs.set(sid, patch)}
                 onCalibrate={() => setWizardFor(sid)}
                 onDelete={() => removeScale(deviceId, sid)}
@@ -276,15 +282,6 @@ function DeviceDetail() {
             </button>
           )}
         </section>
-      )}
-
-      {tab === "longterm" && (
-        <LongTermView
-          deviceId={deviceId}
-          scales={scales}
-          scaleIds={scaleIds}
-          comments={comments}
-        />
       )}
 
       {tab === "settings" && (

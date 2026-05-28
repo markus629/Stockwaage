@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-export type DeviceTab = "dashboard" | "scales" | "longterm" | "settings";
+export type DeviceTab = "dashboard" | "scales" | "settings";
 
 const DEVICE_TAB_KEY_PREFIX = "stockwaage.tab.";
 
@@ -16,12 +16,7 @@ export function useDeviceTab(
     if (!deviceId || typeof window === "undefined") return;
     try {
       const raw = window.localStorage.getItem(DEVICE_TAB_KEY_PREFIX + deviceId);
-      if (
-        raw === "dashboard" ||
-        raw === "scales" ||
-        raw === "longterm" ||
-        raw === "settings"
-      )
+      if (raw === "dashboard" || raw === "scales" || raw === "settings")
         setTab(raw as DeviceTab);
     } catch {}
     setHydrated(true);
