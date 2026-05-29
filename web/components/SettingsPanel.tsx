@@ -335,8 +335,8 @@ function FirmwareSection({
       .then(() => {
         window.localStorage.setItem(key, latest);
         setAutoStatus(
-          `Auto-Update auf ${latest} beauftragt – wird beim nächsten ` +
-            `ESP-Wakeup installiert.`,
+          `Auto-Update auf ${latest} beauftragt. Der ESP installiert es ` +
+            `beim nächsten Aufwachen – mit dem Wake-Button geht es sofort.`,
         );
       })
       .catch((e) =>
@@ -410,8 +410,8 @@ function FirmwareSection({
           <span className="text-sm">
             Neue Firmware automatisch installieren
             <span className="mt-0.5 block text-xs text-neutral-500">
-              Sobald ein neues Release auf GitHub erkannt wird, schickt
-              das UI selbst den Update-Auftrag an den ESP.
+              Der ESP zieht neue Releases beim Aufwachen selbst. Zusätzlich
+              schickt das UI den Auftrag, sobald es ein Release sieht.
             </span>
           </span>
         </label>
@@ -432,10 +432,12 @@ function FirmwareSection({
         )}
         {error && <p className="text-xs text-red-700">{error}</p>}
         <p className="text-xs text-neutral-500">
-          ESP prüft beim nächsten Wakeup auf neue Releases und meldet die
-          gefundene Version. Der Auftrag liegt in Firestore und wird
-          beim nächsten Online-Sein des ESP ausgeführt – das UI muss
-          dafür nicht offen bleiben.
+          Der ESP prüft bei jedem Aufwachen auf neue Releases und
+          installiert sie dann sofort (vor der Messung), sofern
+          Auto-Update an ist oder ein Update beauftragt wurde. Da er
+          meist schläft: <strong>Wake-Button drücken oder ESP neu
+          starten → Update läuft sofort → fertig.</strong> Der Auftrag
+          liegt in Firestore, das UI muss nicht offen bleiben.
         </p>
       </div>
     </Section>

@@ -43,6 +43,10 @@ int      wakeCfgPin     = 5;
 int      wakeCfgLevel   = 0;
 uint32_t wakeCfgPauseMin = 30;
 
+// Ergebnis des GitHub-Release-Checks. Wird einmal pro Wakeup frueh in
+// setup() geholt (fuer Auto-Update) und im Heartbeat wiederverwendet.
+updater::LatestInfo gLatest;
+
 // ============================================================================
 // Helper
 // ============================================================================
@@ -245,8 +249,8 @@ bool measureAndUpload() {
     daily::update(idToken, deviceId, String(dayKey), kgScales, env);
   }
 
-  // 3) Heartbeat (inkl. latest-Firmware-Check von GitHub)
-  updater::LatestInfo latest = updater::fetchLatest();
+  // 3) Heartbeat. latest-Info kommt aus dem frueheren Check in setup().
+  const updater::LatestInfo& latest = gLatest;
 
   DynamicJsonDocument hb(1024);
   JsonObject hbf = hb.createNestedObject("fields");
@@ -267,17 +271,6 @@ bool measureAndUpload() {
     latest.ok
       ? "lastSeen,deviceId,vBat,intervalSec,firmwareVersion,latestFirmwareVersion,latestFirmwareUrl"
       : "lastSeen,deviceId,vBat,intervalSec,firmwareVersion");
-
-  // Auto-Update: wenn der User in den Einstellungen aktiviert hat und
-  // GitHub eine neuere Version hat -> jetzt sofort flashen. ESP rebootet
-  // im Erfolgsfall, der Rest der Loop wird uebersprungen.
-  if (cfg.main.autoUpdateEnabled && latest.ok &&
-      updater::isNewer(FIRMWARE_VERSION, latest.version)) {
-    Serial.printf("[auto-update] %s -> %s\n",
-                  FIRMWARE_VERSION, latest.version.c_str());
-    updater::applyUpdate(latest.binUrl);
-    // wenn wir hier landen, ist der Update fehlgeschlagen.
-  }
 
   return true;
 }
@@ -353,6 +346,19 @@ void setup() {
   commands::processPending(idToken, deviceId, cfg);
   // commands haben evtl. die Config geaendert (tare/cal) -> erneut laden
   cfg.load(idToken, deviceId);
+
+  // Firmware-Update so frueh wie moeglich pruefen, noch VOR der Messung.
+  // So gilt: Neustart -> (falls neuere Version + Auto-Update an) sofort
+  // flashen -> fertig, ohne erst den ganzen Messzyklus abzuwarten.
+  // Ein manueller Update-Command wurde bereits in processPending behandelt.
+  gLatest = updater::fetchLatest();
+  if (cfg.main.autoUpdateEnabled && gLatest.ok &&
+      updater::isNewer(FIRMWARE_VERSION, gLatest.version)) {
+    Serial.printf("[auto-update] %s -> %s (sofort)\n",
+                  FIRMWARE_VERSION, gLatest.version.c_str());
+    updater::applyUpdate(gLatest.binUrl);  // rebootet im Erfolgsfall
+    // wenn wir hier landen, ist das Update fehlgeschlagen -> normal weiter.
+  }
 
   bool ok = measureAndUpload();
   if (ok) { failureStreak = 0; Serial.println("Upload OK"); }
