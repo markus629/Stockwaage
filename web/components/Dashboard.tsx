@@ -21,7 +21,7 @@ import {
   type ScaleConfig,
 } from "@/lib/devices";
 import ScaleChart from "./ScaleChart";
-import { FeedForecastTile, SwarmAlarmTile } from "./HiveStatus";
+import { ScaleFeedStatus, ScaleSwarmStatus } from "./HiveStatus";
 
 const DASHBOARD_DAYS = 3;
 
@@ -62,7 +62,7 @@ export default function Dashboard({
     !!mainCfg.rainEnabled &&
     windowReadings.some((r) => r.rainRaw !== undefined);
 
-  const hasScales = scaleIds.length > 0;
+  const hasScales = dashboardScales.length > 0;
   const empty =
     !hasScales && !showTemp && !showBattery && !showSolar && !showRain;
 
@@ -77,32 +77,20 @@ export default function Dashboard({
 
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      {hasScales && (
-        <>
-          <SwarmAlarmTile
-            readings={windowReadings}
-            dailyStats={dailyStats}
-            scales={scales}
-            scaleIds={scaleIds}
-            dropKg={mainCfg.swarmDropKg ?? DEFAULT_SWARM_DROP_KG}
-            windowMin={mainCfg.swarmWindowMin ?? DEFAULT_SWARM_WINDOW_MIN}
-          />
-          <FeedForecastTile
-            readings={windowReadings}
-            dailyStats={dailyStats}
-            scales={scales}
-            scaleIds={scaleIds}
-          />
-        </>
-      )}
-
+      {/* Pro Waage eine Kachel: Graph + Schwarm-Alarm + Futter-Reichweite.
+          Nur fuer mit Stern markierte Waagen (onDashboard). */}
       {dashboardScales.map((sid) => (
-        <Tile
-          key={sid}
-          title={scales[sid]?.name || sid}
-          subtitle={sid}
-        >
-          <ScaleChart scaleId={sid} readings={windowReadings} days={3} />
+        <Tile key={sid} title={scales[sid]?.name || sid} subtitle={sid}>
+          <ScaleChart scaleId={sid} readings={windowReadings} days={DASHBOARD_DAYS} />
+          <div className="mt-2 space-y-1 border-t border-neutral-100 pt-2">
+            <ScaleSwarmStatus
+              readings={windowReadings}
+              scaleId={sid}
+              dropKg={mainCfg.swarmDropKg ?? DEFAULT_SWARM_DROP_KG}
+              windowMin={mainCfg.swarmWindowMin ?? DEFAULT_SWARM_WINDOW_MIN}
+            />
+            <ScaleFeedStatus dailyStats={dailyStats} scaleId={sid} />
+          </div>
         </Tile>
       ))}
 
@@ -178,11 +166,7 @@ export default function Dashboard({
       )}
 
       {showRain && (
-        <Tile
-          title="Regen"
-          subtitle={`${DASHBOARD_DAYS} Tage`}
-          wide
-        >
+        <Tile title="Regen" subtitle={`${DASHBOARD_DAYS} Tage`}>
           <RainBars readings={windowReadings} />
         </Tile>
       )}
@@ -193,20 +177,14 @@ export default function Dashboard({
 function Tile({
   title,
   subtitle,
-  wide,
   children,
 }: {
   title: string;
   subtitle?: string;
-  wide?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <section
-      className={`rounded-lg border border-neutral-200 bg-white p-3 ${
-        wide ? "sm:col-span-2" : ""
-      }`}
-    >
+    <section className="rounded-lg border border-neutral-200 bg-white p-3">
       <div className="mb-1 flex items-baseline justify-between gap-2">
         <h3 className="text-sm font-semibold">{title}</h3>
         {subtitle && (
