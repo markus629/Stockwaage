@@ -349,9 +349,9 @@ function FirmwareSection({
     if (
       !confirm(
         `Firmware-Update auf ${latest} beauftragen?\n\n` +
-          `Der ESP lädt die neue Version beim nächsten Wakeup von ` +
-          `GitHub und startet neu (~1–2 Min). Stromversorgung in der ` +
-          `Zeit nicht unterbrechen.`,
+          `Der ESP lädt die neue Version beim nächsten Aufwachen von ` +
+          `GitHub und startet neu (~1–2 Min) – mit dem Wake-Button sofort. ` +
+          `Stromversorgung in der Zeit nicht unterbrechen.`,
       )
     )
       return;
@@ -369,8 +369,8 @@ function FirmwareSection({
         );
       }
       setAutoStatus(
-        `Update auf ${latest} beauftragt – wird beim nächsten ESP-Wakeup ` +
-          `installiert.`,
+        `Update auf ${latest} beauftragt. Der ESP installiert es beim ` +
+          `nächsten Aufwachen – mit dem Wake-Button geht es sofort.`,
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
