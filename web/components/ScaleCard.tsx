@@ -21,6 +21,7 @@ import ScaleChart from "./ScaleChart";
 import ScaleLongTermChart from "./ScaleLongTermChart";
 
 type Props = {
+  anchorId?: string;
   deviceId: string;
   scaleId: string;
   cfg: ScaleConfig;
@@ -68,6 +69,7 @@ function configSummary(cfg: ScaleConfig): string {
 }
 
 export default function ScaleCard({
+  anchorId,
   deviceId,
   scaleId,
   cfg,
@@ -117,7 +119,10 @@ export default function ScaleCard({
   }
 
   return (
-    <li className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
+    <li
+      id={anchorId}
+      className="scroll-mt-4 overflow-hidden rounded-lg border border-neutral-200 bg-white"
+    >
       <div
         role="button"
         tabIndex={0}

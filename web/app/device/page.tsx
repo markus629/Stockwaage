@@ -92,8 +92,17 @@ function DeviceDetail() {
   const [dailyStats, setDailyStats] = useState<DailyStat[]>([]);
   const [dailyLoaded, setDailyLoaded] = useState(false);
   const [wizardFor, setWizardFor] = useState<string | null>(null);
+  const [scrollToScale, setScrollToScale] = useState<string | null>(null);
   const uiPrefs = useScaleUiPrefs(deviceId);
   const [tab, setTab] = useDeviceTab(deviceId);
+
+  // Klick auf eine Dashboard-Kachel -> in den Waagen-Tab springen, die Karte
+  // aufklappen und dorthin scrollen.
+  function goToScale(sid: string) {
+    uiPrefs.set(sid, { cardOpen: true });
+    setTab("scales");
+    setScrollToScale(sid);
+  }
 
   useEffect(() => onAuthStateChanged(auth, setUser), []);
 
@@ -139,6 +148,15 @@ function DeviceDetail() {
     () => Object.keys(scales).sort((a, b) => a.localeCompare(b)),
     [scales],
   );
+
+  // Nach dem Tab-Wechsel zur angeklickten Waage scrollen.
+  useEffect(() => {
+    if (tab !== "scales" || !scrollToScale) return;
+    document
+      .getElementById(`scale-${scrollToScale}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setScrollToScale(null);
+  }, [tab, scrollToScale]);
 
   // Beim Geraetewechsel die lazy geladenen Daten verwerfen.
   useEffect(() => {
@@ -284,6 +302,7 @@ function DeviceDetail() {
           scaleIds={scaleIds}
           mainCfg={mainCfg}
           dailyStats={dailyStats}
+          onScaleClick={goToScale}
         />
       )}
 
@@ -293,6 +312,7 @@ function DeviceDetail() {
             {scaleIds.map((sid) => (
               <ScaleCard
                 key={sid}
+                anchorId={`scale-${sid}`}
                 deviceId={deviceId}
                 scaleId={sid}
                 cfg={scales[sid] ?? { id: sid }}

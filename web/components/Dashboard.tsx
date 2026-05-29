@@ -31,6 +31,7 @@ type Props = {
   scaleIds: string[];
   mainCfg: MainConfig;
   dailyStats: DailyStat[];
+  onScaleClick?: (scaleId: string) => void;
 };
 
 export default function Dashboard({
@@ -39,6 +40,7 @@ export default function Dashboard({
   scaleIds,
   mainCfg,
   dailyStats,
+  onScaleClick,
 }: Props) {
   const windowReadings = useMemo(() => {
     const start = new Date();
@@ -80,7 +82,12 @@ export default function Dashboard({
       {/* Pro Waage eine Kachel: Graph + Schwarm-Alarm + Futter-Reichweite.
           Nur fuer mit Stern markierte Waagen (onDashboard). */}
       {dashboardScales.map((sid) => (
-        <Tile key={sid} title={scales[sid]?.name || sid} subtitle={sid}>
+        <Tile
+          key={sid}
+          title={scales[sid]?.name || sid}
+          subtitle={sid}
+          onClick={onScaleClick ? () => onScaleClick(sid) : undefined}
+        >
           <ScaleChart scaleId={sid} readings={windowReadings} days={DASHBOARD_DAYS} />
           <div className="mt-2 space-y-1 border-t border-neutral-100 pt-2">
             <ScaleSwarmStatus
@@ -177,14 +184,37 @@ export default function Dashboard({
 function Tile({
   title,
   subtitle,
+  onClick,
   children,
 }: {
   title: string;
   subtitle?: string;
+  onClick?: () => void;
   children: React.ReactNode;
 }) {
+  const clickable = !!onClick;
   return (
-    <section className="rounded-lg border border-neutral-200 bg-white p-3">
+    <section
+      onClick={onClick}
+      onKeyDown={
+        clickable
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      title={clickable ? "Zur Waage" : undefined}
+      className={`rounded-lg border border-neutral-200 bg-white p-3 ${
+        clickable
+          ? "cursor-pointer transition hover:border-neutral-400 hover:bg-neutral-50"
+          : ""
+      }`}
+    >
       <div className="mb-1 flex items-baseline justify-between gap-2">
         <h3 className="text-sm font-semibold">{title}</h3>
         {subtitle && (
