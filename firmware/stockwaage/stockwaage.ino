@@ -22,6 +22,7 @@
 #include "commands.h"
 #include "updater.h"
 #include "daily_stats.h"
+#include <Adafruit_NeoPixel.h>
 
 // ----- State (ueberlebt Deep Sleep) -----------------------------------------
 RTC_DATA_ATTR int     bootCount = 0;
@@ -34,6 +35,13 @@ String        deviceId;
 uint32_t      bootIntervalSec;       // Build-/Portal-Default
 String        idToken;
 RuntimeConfig cfg;
+
+// Wake-Button-Settings, in NVS gecacht damit der Doppelklick schon VOR
+// dem WiFi-Connect erkannt werden kann.
+bool     wakeCfgEnabled = false;
+int      wakeCfgPin     = 5;
+int      wakeCfgLevel   = 0;
+uint32_t wakeCfgPauseMin = 30;
 
 // ============================================================================
 // Helper
@@ -74,6 +82,44 @@ void loadPrefs() {
   firebasePassword = prefs.getString("fbPass", "");
   deviceId         = prefs.getString("devId",  DEFAULT_DEVICE_ID);
   bootIntervalSec  = prefs.getUInt  ("interval", DEFAULT_INTERVAL_SEC);
+  wakeCfgEnabled   = prefs.getBool  ("wkEn",   false);
+  wakeCfgPin       = prefs.getInt   ("wkPin",  5);
+  wakeCfgLevel     = prefs.getInt   ("wkLvl",  0);
+  wakeCfgPauseMin  = prefs.getUInt  ("wkPause", 30);
+}
+
+// Onboard-LED kurz gruen blinken (Bestaetigung Messpause).
+void blinkPause() {
+  Adafruit_NeoPixel px(1, PIN_NEOPIXEL, NEO_GRB + NEO_KHZ800);
+  px.begin();
+  for (int i = 0; i < 3; i++) {
+    px.setPixelColor(0, px.Color(0, 50, 0));
+    px.show();
+    delay(150);
+    px.clear();
+    px.show();
+    delay(150);
+  }
+}
+
+// Nach ext0-Wakeup pruefen ob ein zweiter Tastendruck folgt (Doppelklick).
+// Der erste Druck haelt den Pin beim Boot noch aktiv -> erst Loslassen
+// abwarten, dann ~1.5s Fenster auf den zweiten Druck.
+bool detectDoublePress(int pin, int level) {
+  const int active = (level == 0) ? LOW : HIGH;
+  pinMode(pin, (level == 0) ? INPUT_PULLUP : INPUT_PULLDOWN);
+  uint32_t t = millis();
+  while (digitalRead(pin) == active && millis() - t < 1500) delay(5);
+  delay(40);  // entprellen
+  t = millis();
+  while (millis() - t < 1500) {
+    if (digitalRead(pin) == active) {
+      delay(40);
+      return true;
+    }
+    delay(5);
+  }
+  return false;
 }
 
 bool ensureWiFi(bool forcePortal) {
@@ -251,6 +297,22 @@ void setup() {
 
   loadPrefs();
 
+  // Doppelklick auf den Wake-Button = Messpause. Wird VOR dem WiFi-Connect
+  // geprueft, damit das Zeitfenster fuer den zweiten Druck nicht verstreicht.
+  if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT0 &&
+      wakeCfgEnabled && wakeCfgPin > 0) {
+    if (detectDoublePress(wakeCfgPin, wakeCfgLevel)) {
+      Serial.printf("[wake] Doppelklick -> Messpause %u min\n",
+                    wakeCfgPauseMin);
+      blinkPause();
+      // ext0-Config aus Cache, damit man die Pause per 1x-Druck beenden kann.
+      cfg.main.wakeButtonEnabled = wakeCfgEnabled;
+      cfg.main.wakeButtonPin     = wakeCfgPin;
+      cfg.main.wakeButtonLevel   = wakeCfgLevel;
+      enterDeepSleep(wakeCfgPauseMin * 60);
+    }
+  }
+
   if (!ensureWiFi(forcePortal)) {
     Serial.println("WiFi failed -> sleep");
     enterDeepSleep(bootIntervalSec);
@@ -269,6 +331,13 @@ void setup() {
   // Config + Commands. Portal-Wert dient als Default, falls Firestore leer.
   cfg.main.intervalSec = bootIntervalSec;
   cfg.load(idToken, deviceId);
+
+  // Wake-Settings fuer den naechsten Boot cachen (Doppelklick-Erkennung
+  // vor WiFi).
+  prefs.putBool("wkEn",  cfg.main.wakeButtonEnabled);
+  prefs.putInt ("wkPin", cfg.main.wakeButtonPin);
+  prefs.putInt ("wkLvl", cfg.main.wakeButtonLevel);
+  prefs.putUInt("wkPause", cfg.main.wakePauseMin);
 
   // HX711 mit den DT-Pins aus der Firestore-Config initialisieren.
   // Waagen ohne Doku (exists=false) werden ueberspringen -> dtPin=-1.

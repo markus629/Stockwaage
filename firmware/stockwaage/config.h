@@ -45,6 +45,9 @@ static const int PIN_HX711_DT[NUM_SCALES] = {
 // BOOT-Taster zum Forcieren des Captive Portals (waehrend Aufwachen halten)
 #define PIN_PORTAL_FORCE    0
 
+// Onboard-NeoPixel (WS2812) fuer Status-Feedback
+#define PIN_NEOPIXEL        48
+
 // ----- Default-Werte (vom User ueberschreibbar) -----------------------------
 #define DEFAULT_DEVICE_ID         "esp-01"
 #define DEFAULT_INTERVAL_SEC      900   // 15 Minuten

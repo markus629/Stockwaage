@@ -52,6 +52,7 @@ export type MainConfig = {
   wakeButtonEnabled?: boolean;
   wakeButtonPin?: number;
   wakeButtonLevel?: number;
+  wakePauseMin?: number;
   // Firmware auto-update
   autoUpdateEnabled?: boolean;
 };

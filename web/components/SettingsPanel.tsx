@@ -237,7 +237,7 @@ export default function SettingsPanel({
 
       <SensorSection
         title="Wake-Button"
-        subtitle="Externer Taster zwischen GPIO und GND/3.3V, weckt den ESP aus dem Deep-Sleep für eine Sofort-Messung."
+        subtitle="Externer Taster. 1× drücken = sofort aufwachen & messen. 2× drücken = Messpause (zum Arbeiten an den Bienen)."
         enabled={mainCfg.wakeButtonEnabled ?? false}
         onEnabledChange={(v) =>
           updateMainConfig(deviceId, { wakeButtonEnabled: v })
@@ -270,10 +270,28 @@ export default function SettingsPanel({
               <option value={1}>HIGH (Taster nach 3.3 V, ext. Pull-Down)</option>
             </select>
           </Field>
+          <Field label="Messpause bei Doppelklick (Minuten)">
+            <input
+              type="number"
+              min={1}
+              max={1440}
+              value={mainCfg.wakePauseMin ?? 30}
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10);
+                if (!isNaN(v) && v >= 1)
+                  updateMainConfig(deviceId, {
+                    wakePauseMin: Math.min(1440, v),
+                  });
+              }}
+              className="mt-1 w-full rounded border border-neutral-300 px-2 py-1 text-sm"
+            />
+          </Field>
         </div>
         <Hint>
-          Wirkt ab dem nächsten Deep-Sleep. Taster gegen GND ist die
-          einfachste Variante – der ESP konfiguriert intern den Pull-Up.
+          Bei Doppelklick blinkt die Onboard-LED grün und der ESP pausiert
+          die eingestellte Zeit (kein Wiegen). Ein einzelner Druck während
+          der Pause beendet sie sofort. Wirkt ab dem nächsten Deep-Sleep;
+          Taster gegen GND ist die einfachste Variante.
         </Hint>
       </SensorSection>
     </div>
