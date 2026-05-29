@@ -287,6 +287,63 @@ bool measureAndUpload() {
   return true;
 }
 
+// HX711-Pins + Umgebungssensoren aus der aktuellen Config (neu) initialisieren.
+// Idempotent -> auch im Wachbetrieb bei geaenderten Pins/Sensoren aufrufbar.
+void initSensorsFromCfg() {
+  int dtPins[NUM_SCALES];
+  for (int i = 0; i < NUM_SCALES; i++) {
+    // Waagen ohne Doku (exists=false) ueberspringen -> dtPin=-1.
+    dtPins[i] = cfg.scales[i].exists ? cfg.scales[i].dtPin : -1;
+  }
+  sensors::initScales(dtPins);
+  sensors::initEnv(cfg.main);
+}
+
+// Wachbetrieb (Deep Sleep deaktiviert): ESP bleibt wach, uebernimmt
+// Einstellungen + Update-Commands sofort und misst weiterhin im eingestellten
+// Intervall. Kehrt zurueck, sobald Deep Sleep wieder aktiviert wird.
+void runAwakeMode() {
+  Serial.println("[awake] Deep Sleep AUS -> bleibe wach");
+  uint32_t lastMeasureMs = millis();
+  uint32_t lastLoginMs   = millis();
+  const uint32_t LOGIN_REFRESH_MS = 50UL * 60UL * 1000UL;  // Token < 1h gueltig
+
+  while (true) {
+    delay(3000);
+
+    // WLAN ggf. wiederherstellen.
+    if (WiFi.status() != WL_CONNECTED) {
+      WiFi.reconnect();
+      delay(2000);
+    }
+
+    // ID-Token erneuern, bevor er nach ~1h ablaeuft.
+    if (millis() - lastLoginMs >= LOGIN_REFRESH_MS) {
+      auto lr = fb::login(FIREBASE_EMAIL, firebasePassword);
+      if (lr.ok) { idToken = lr.idToken; lastLoginMs = millis(); }
+    }
+
+    // Commands (inkl. Firmware-Update) sofort abarbeiten und Config jedes Mal
+    // neu laden, damit UI-Einstellungen unmittelbar greifen.
+    commands::processPending(idToken, deviceId, cfg);
+    cfg.load(idToken, deviceId);
+
+    // Deep Sleep wieder aktiviert? -> raus, normaler Sleep-Zyklus uebernimmt.
+    if (cfg.main.deepSleepEnabled) {
+      Serial.println("[awake] Deep Sleep wieder AN");
+      return;
+    }
+
+    // Weiterhin im eingestellten Intervall messen.
+    uint32_t ivSec = cfg.main.intervalSec < 30 ? 30 : cfg.main.intervalSec;
+    if (millis() - lastMeasureMs >= ivSec * 1000UL) {
+      initSensorsFromCfg();   // evtl. geaenderte Pins/Sensoren uebernehmen
+      measureAndUpload();
+      lastMeasureMs = millis();
+    }
+  }
+}
+
 // ============================================================================
 // Setup / Loop
 // ============================================================================
@@ -344,16 +401,8 @@ void setup() {
   prefs.putInt ("wkLvl", cfg.main.wakeButtonLevel);
   prefs.putUInt("wkPause", cfg.main.wakePauseMin);
 
-  // HX711 mit den DT-Pins aus der Firestore-Config initialisieren.
-  // Waagen ohne Doku (exists=false) werden ueberspringen -> dtPin=-1.
-  int dtPins[NUM_SCALES];
-  for (int i = 0; i < NUM_SCALES; i++) {
-    dtPins[i] = cfg.scales[i].exists ? cfg.scales[i].dtPin : -1;
-  }
-  sensors::initScales(dtPins);
-
-  // I2C-Sensoren (BME280, INA219x2) + Regensensor.
-  sensors::initEnv(cfg.main);
+  // HX711 + I2C-Sensoren (BME280, INA219x2) + Regensensor aus der Config.
+  initSensorsFromCfg();
 
   bool cfgChanged = false;
   commands::processPending(idToken, deviceId, cfg, &cfgChanged);
@@ -412,6 +461,13 @@ void setup() {
     commands::processPending(idToken, deviceId, cfg, &changed);
     if (changed) cfg.load(idToken, deviceId);
     nowMs = (uint64_t)time(nullptr) * 1000ULL;
+  }
+
+  // Deep Sleep deaktiviert? -> wach bleiben statt schlafen (sofortige
+  // Uebernahme von Einstellungen/Updates). Kehrt erst zurueck, wenn der
+  // Nutzer Deep Sleep wieder einschaltet.
+  if (!cfg.main.deepSleepEnabled) {
+    runAwakeMode();
   }
 
   enterDeepSleep(cfg.main.intervalSec);

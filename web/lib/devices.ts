@@ -33,6 +33,9 @@ export type Device = {
 export type MainConfig = {
   intervalSec?: number;
   stayAwakeUntilMs?: number;
+  // false = ESP bleibt wach (kein Deep Sleep): Einstellungen/Updates greifen
+  // sofort, dafuer hoeherer Stromverbrauch. Default true.
+  deepSleepEnabled?: boolean;
   // I2C-Bus (geteilt von BME280 + INA219)
   i2cSda?: number;
   i2cScl?: number;

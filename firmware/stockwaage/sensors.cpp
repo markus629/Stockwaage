@@ -49,9 +49,16 @@ void initScales(const int dtPins[NUM_SCALES]) {
 }
 
 void initEnv(const MainConfig& cfg) {
+  // Re-entrant: bei wiederholtem Aufruf (Wachbetrieb) alten Zustand sauber
+  // freigeben, sonst leaken die INA219-Objekte.
+  if (inaBat) { delete inaBat; inaBat = nullptr; }
+  if (inaSol) { delete inaSol; inaSol = nullptr; }
+  bmeReady = inaBatReady = inaSolReady = false;
+
   const bool needI2C = cfg.bme280Enabled || cfg.inaBatteryEnabled ||
                        cfg.inaSolarEnabled;
-  if (needI2C && !i2cStarted) {
+  if (needI2C) {
+    // Erneutes begin() ist unkritisch und uebernimmt evtl. geaenderte Pins.
     Wire.begin(cfg.i2cSda, cfg.i2cScl);
     Wire.setClock(100000);  // konservativ fuer lange Kabel
     i2cStarted = true;

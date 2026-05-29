@@ -34,6 +34,8 @@ struct MainConfig {
   int      wakeButtonLevel    = 0;        // 0 = LOW (Taster nach GND)
   uint32_t wakePauseMin       = 30;       // Doppelklick -> Messpause-Dauer
   bool     autoUpdateEnabled  = false;
+  bool     deepSleepEnabled   = true;     // false = ESP bleibt wach (sofortige
+                                          // Uebernahme von Settings/Updates)
 };
 
 class RuntimeConfig {

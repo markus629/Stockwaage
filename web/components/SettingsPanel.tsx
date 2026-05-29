@@ -54,7 +54,29 @@ export default function SettingsPanel({
   return (
     <div className="space-y-4">
       <Section title="Allgemein">
-        <div className="grid gap-3 sm:grid-cols-2">
+        <label className="flex items-start gap-2">
+          <input
+            type="checkbox"
+            checked={mainCfg.deepSleepEnabled ?? true}
+            onChange={(e) =>
+              updateMainConfig(deviceId, {
+                deepSleepEnabled: e.target.checked,
+              })
+            }
+            className="mt-1"
+          />
+          <span className="text-sm">
+            Deep Sleep (Akku-Sparmodus)
+            <span className="mt-0.5 block text-xs text-neutral-500">
+              An: Der ESP schläft zwischen den Messungen – stromsparend, aber
+              Einstellungen/Updates greifen erst beim nächsten Aufwachen.
+              Aus: Der ESP bleibt wach, übernimmt Einstellungen und Updates
+              sofort (höherer Verbrauch). Gemessen wird in beiden Fällen im
+              eingestellten Intervall.
+            </span>
+          </span>
+        </label>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <Field label="Mess-Intervall (Sekunden)">
             <DebouncedInput
               type="number"
@@ -68,7 +90,11 @@ export default function SettingsPanel({
               }}
               className="mt-1 w-full rounded border border-neutral-300 px-2 py-1"
             />
-            <Hint>Wirkt ab nächstem ESP-Wakeup.</Hint>
+            <Hint>
+              {(mainCfg.deepSleepEnabled ?? true)
+                ? "Wirkt ab nächstem ESP-Wakeup."
+                : "Wirkt sofort (Deep Sleep ist aus)."}
+            </Hint>
           </Field>
         </div>
       </Section>

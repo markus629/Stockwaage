@@ -67,6 +67,7 @@ bool RuntimeConfig::load(const String& idToken, const String& deviceId) {
                                   fields["wakePauseMin"], main.wakePauseMin);
       main.autoUpdateEnabled = fb::readBool  (fields["autoUpdateEnabled"],
                                               false);
+      main.deepSleepEnabled  = fb::readBool  (fields["deepSleepEnabled"], true);
     }
   }
 
