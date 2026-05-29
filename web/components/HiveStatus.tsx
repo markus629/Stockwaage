@@ -16,6 +16,11 @@ type Props = {
   scaleIds: string[];
 };
 
+type SwarmProps = Props & {
+  dropKg: number;
+  windowMin: number;
+};
+
 function nameOf(scales: Record<string, ScaleConfig>, sid: string): string {
   return scales[sid]?.name || sid;
 }
@@ -47,15 +52,21 @@ function fmtWhen(ts?: number): string {
 
 // ----- Schwarm-Alarm --------------------------------------------------------
 
-export function SwarmAlarmTile({ readings, scales, scaleIds }: Props) {
+export function SwarmAlarmTile({
+  readings,
+  scales,
+  scaleIds,
+  dropKg,
+  windowMin,
+}: SwarmProps) {
   const rows = useMemo(
     () =>
       scaleIds.map((sid) => ({
         sid,
         name: nameOf(scales, sid),
-        res: detectSwarm(readings, sid),
+        res: detectSwarm(readings, sid, dropKg, windowMin * 60 * 1000),
       })),
-    [readings, scaleIds, scales],
+    [readings, scaleIds, scales, dropKg, windowMin],
   );
 
   const anyAlarm = rows.some((r) => r.res.swarm);
@@ -78,8 +89,9 @@ export function SwarmAlarmTile({ readings, scales, scaleIds }: Props) {
         ))}
       </ul>
       <p className="mt-2 text-[10px] text-neutral-400">
-        Roter Punkt = plötzlicher Gewichtssturz (&gt; 1,5 kg in &lt; 30 min) in
-        den letzten Tagen. Grün = unauffällig.
+        Roter Punkt = plötzlicher Gewichtssturz (&gt; {dropKg} kg in &lt;{" "}
+        {windowMin} min) in den letzten Tagen. Grün = unauffällig. Schwellen in
+        den Einstellungen anpassbar.
       </p>
     </section>
   );

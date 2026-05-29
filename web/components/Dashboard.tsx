@@ -12,11 +12,13 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type {
-  DailyStat,
-  MainConfig,
-  Reading,
-  ScaleConfig,
+import {
+  DEFAULT_SWARM_DROP_KG,
+  DEFAULT_SWARM_WINDOW_MIN,
+  type DailyStat,
+  type MainConfig,
+  type Reading,
+  type ScaleConfig,
 } from "@/lib/devices";
 import ScaleChart from "./ScaleChart";
 import { FeedForecastTile, SwarmAlarmTile } from "./HiveStatus";
@@ -82,6 +84,8 @@ export default function Dashboard({
             dailyStats={dailyStats}
             scales={scales}
             scaleIds={scaleIds}
+            dropKg={mainCfg.swarmDropKg ?? DEFAULT_SWARM_DROP_KG}
+            windowMin={mainCfg.swarmWindowMin ?? DEFAULT_SWARM_WINDOW_MIN}
           />
           <FeedForecastTile
             readings={windowReadings}

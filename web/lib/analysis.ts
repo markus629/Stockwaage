@@ -7,10 +7,11 @@ import { linearRegression, type DailyStat, type Reading } from "./devices";
 
 // ----- Schwarm-Erkennung ----------------------------------------------------
 
-// Ploetzlicher Gewichtssturz = Schwarm abgegangen. Schwellen bewusst grob:
-// > 1,5 kg Verlust innerhalb von 30 Minuten.
+// Ploetzlicher Gewichtssturz = Schwarm abgegangen. Standardschwellen (in den
+// Einstellungen ueberschreibbar): > 1,5 kg Verlust innerhalb von 30 Minuten.
 export const SWARM_DROP_KG = 1.5;
-export const SWARM_WINDOW_MS = 30 * 60 * 1000;
+export const SWARM_WINDOW_MIN = 30;
+export const SWARM_WINDOW_MS = SWARM_WINDOW_MIN * 60 * 1000;
 
 export type SwarmResult = {
   swarm: boolean;
@@ -20,10 +21,13 @@ export type SwarmResult = {
 };
 
 // Sucht im (beliebig sortierten) Messwert-Array einer Waage nach dem
-// groessten Gewichtsabfall innerhalb eines SWARM_WINDOW_MS-Fensters.
+// groessten Gewichtsabfall innerhalb des Zeitfensters. Schwellen sind
+// parametrisierbar (kommen aus den Geraete-Einstellungen).
 export function detectSwarm(
   readings: Reading[],
   scaleId: string,
+  dropKg: number = SWARM_DROP_KG,
+  windowMs: number = SWARM_WINDOW_MS,
 ): SwarmResult {
   const pts = readings
     .map((r) => ({ ts: r.ts, kg: r.scales?.[scaleId]?.kg }))
@@ -37,8 +41,8 @@ export function detectSwarm(
   let head = 0;
   let maxInWindow = -Infinity;
   for (let i = 0; i < pts.length; i++) {
-    // Fenster vorne beschneiden (alles aelter als 30 min vor pts[i]).
-    while (pts[head].ts < pts[i].ts - SWARM_WINDOW_MS) {
+    // Fenster vorne beschneiden (alles aelter als windowMs vor pts[i]).
+    while (pts[head].ts < pts[i].ts - windowMs) {
       head++;
       // Maximum im Fenster ggf. neu bestimmen, wenn der Spitzenwert rausfiel.
       maxInWindow = -Infinity;
@@ -54,7 +58,7 @@ export function detectSwarm(
     }
   }
 
-  return { swarm: worst >= SWARM_DROP_KG, dropKg: worst, atTs, samples: pts.length };
+  return { swarm: worst >= dropKg, dropKg: worst, atTs, samples: pts.length };
 }
 
 // ----- Winterfutter-Prognose ------------------------------------------------

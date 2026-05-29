@@ -57,7 +57,15 @@ export type MainConfig = {
   wakePauseMin?: number;
   // Firmware auto-update
   autoUpdateEnabled?: boolean;
+  // Schwarm-Alarm-Schwellen (rein UI-seitig ausgewertet, Firmware ignoriert
+  // sie): Gewichtssturz >= swarmDropKg innerhalb swarmWindowMin Minuten.
+  swarmDropKg?: number;
+  swarmWindowMin?: number;
 };
+
+// Standardwerte fuer den Schwarm-Alarm (siehe lib/analysis.ts).
+export const DEFAULT_SWARM_DROP_KG = 1.5;
+export const DEFAULT_SWARM_WINDOW_MIN = 30;
 
 // ESP32-S3-WROOM-1 N16R8: SPI-Flash 26-32, Octal-PSRAM 33-37, USB 19/20,
 // UART0 43/44, Strapping 0/3/45/46, Onboard-LED 48 -> alle nicht in den
