@@ -14,6 +14,20 @@ static String scaleDocPath(const String& deviceId, int idx) {
   return String("users/") + OWNER_UID + "/devices/" + deviceId
        + "/scales/" + scaleId(idx);
 }
+static String scalesCollPath(const String& deviceId) {
+  return String("users/") + OWNER_UID + "/devices/" + deviceId + "/scales";
+}
+
+// "users/.../scales/s3" -> 2 (0-basiert). -1 wenn kein gueltiger Slot.
+static int scaleIdxFromName(const String& name) {
+  int slash = name.lastIndexOf('/');
+  if (slash < 0) return -1;
+  String sid = name.substring(slash + 1);
+  if (!sid.startsWith("s")) return -1;
+  int n = sid.substring(1).toInt();
+  if (n < 1 || n > NUM_SCALES) return -1;
+  return n - 1;
+}
 
 bool RuntimeConfig::load(const String& idToken, const String& deviceId) {
   // --- main ---
@@ -56,23 +70,28 @@ bool RuntimeConfig::load(const String& idToken, const String& deviceId) {
     }
   }
 
-  // --- scales: ein GET pro scaleId (einfacher als Collection-Listing) ---
-  for (int i = 0; i < NUM_SCALES; i++) {
-    String resp2;
-    if (!fb::getDoc(idToken, scaleDocPath(deviceId, i), resp2)) continue;
-    if (resp2.length() == 0) continue;
-    DynamicJsonDocument doc(1024);
-    if (deserializeJson(doc, resp2)) continue;
-    JsonObject f = doc["fields"];
-    scales[i].exists      = true;
-    scales[i].enabled     = fb::readBool   (f["enabled"], false);
-    scales[i].name        = fb::readString (f["name"], "");
-    scales[i].offset      = fb::readNumber (f["offset"], 0.0);
-    scales[i].scaleFactor = fb::readNumber (f["scaleFactor"], 0.0);
-    scales[i].tempCoef    = fb::readNumber (f["tempCoef"], 0.0);
-    scales[i].tempRefC    = fb::readNumber (f["tempRefC"], 20.0);
-    scales[i].dtPin       = (int)fb::readInteger(f["dtPin"],
-                                                 PIN_HX711_DT[i]);
+  // --- scales: EIN Collection-Listing statt acht Einzel-GETs (spart Reads).
+  String scalesResp;
+  if (fb::listDocs(idToken, scalesCollPath(deviceId), NUM_SCALES, scalesResp)
+      && scalesResp.length() > 0) {
+    DynamicJsonDocument doc(16384);
+    if (!deserializeJson(doc, scalesResp)) {
+      JsonArrayConst arr = doc["documents"].as<JsonArrayConst>();
+      for (JsonObjectConst d : arr) {
+        int i = scaleIdxFromName(String((const char*)d["name"]));
+        if (i < 0) continue;
+        JsonObjectConst f = d["fields"];
+        scales[i].exists      = true;
+        scales[i].enabled     = fb::readBool   (f["enabled"], false);
+        scales[i].name        = fb::readString (f["name"], "");
+        scales[i].offset      = fb::readNumber (f["offset"], 0.0);
+        scales[i].scaleFactor = fb::readNumber (f["scaleFactor"], 0.0);
+        scales[i].tempCoef    = fb::readNumber (f["tempCoef"], 0.0);
+        scales[i].tempRefC    = fb::readNumber (f["tempRefC"], 20.0);
+        scales[i].dtPin       = (int)fb::readInteger(f["dtPin"],
+                                                     PIN_HX711_DT[i]);
+      }
+    }
   }
 
   return true;

@@ -28,6 +28,14 @@
 RTC_DATA_ATTR int     bootCount = 0;
 RTC_DATA_ATTR uint8_t failureStreak = 0;
 
+// GitHub-Release-Check wird nur ~1x/Tag durchgefuehrt (spart Calls + Strom).
+// Letztes Ergebnis ueberlebt Deep Sleep im RTC-RAM (Strings als char-Puffer,
+// da heap-basierte String-Objekte einen Deep Sleep nicht ueberstehen).
+RTC_DATA_ATTR uint32_t lastUpdateCheckEpoch = 0;
+RTC_DATA_ATTR bool     rtcLatestOk = false;
+RTC_DATA_ATTR char     rtcLatestVersion[24]  = {0};
+RTC_DATA_ATTR char     rtcLatestUrl[200]      = {0};
+
 // ----- Globals --------------------------------------------------------------
 Preferences   prefs;
 String        firebasePassword;
@@ -202,6 +210,10 @@ bool measureAndUpload() {
   fb::writeInteger(fields, "ts",    (long long)tsMs);
   fb::writeNumber (fields, "vBat",  vBat);
   fb::writeInteger(fields, "boots", bootCount);
+  // TTL-Marker: Firestore loescht das Reading nach READINGS_TTL_DAYS (Policy
+  // auf "expireAt"). Langzeitdaten leben in dailyStats und bleiben.
+  fb::writeTimestamp(fields, "expireAt",
+                     (time_t)(tsMs / 1000ULL) + (time_t)READINGS_TTL_DAYS * 86400);
   if (!isnan(env.tempC))    fb::writeNumber(fields, "ambientC",        env.tempC);
   if (!isnan(env.humidity)) fb::writeNumber(fields, "ambientHumidity", env.humidity);
   if (!isnan(env.pressure)) fb::writeNumber(fields, "ambientPressure", env.pressure);
@@ -343,15 +355,40 @@ void setup() {
   // I2C-Sensoren (BME280, INA219x2) + Regensensor.
   sensors::initEnv(cfg.main);
 
-  commands::processPending(idToken, deviceId, cfg);
-  // commands haben evtl. die Config geaendert (tare/cal) -> erneut laden
-  cfg.load(idToken, deviceId);
+  bool cfgChanged = false;
+  commands::processPending(idToken, deviceId, cfg, &cfgChanged);
+  // Nur erneut laden, wenn ein Command die Config tatsaechlich geaendert hat
+  // (tare/cal/stayAwake). Sonst sparen wir uns den zweiten Load-Roundtrip.
+  if (cfgChanged) cfg.load(idToken, deviceId);
 
   // Firmware-Update so frueh wie moeglich pruefen, noch VOR der Messung.
   // So gilt: Neustart -> (falls neuere Version + Auto-Update an) sofort
   // flashen -> fertig, ohne erst den ganzen Messzyklus abzuwarten.
   // Ein manueller Update-Command wurde bereits in processPending behandelt.
-  gLatest = updater::fetchLatest();
+  // Der GitHub-Check selbst laeuft aber nur ~1x/Tag (Rate-Limit + Strom);
+  // dazwischen kommt das letzte Ergebnis aus dem RTC-RAM.
+  {
+    time_t nowEpoch = time(nullptr);
+    bool checkDue = (lastUpdateCheckEpoch == 0) ||
+        ((uint32_t)nowEpoch - lastUpdateCheckEpoch >= UPDATE_CHECK_INTERVAL_SEC);
+    if (checkDue) {
+      gLatest = updater::fetchLatest();
+      if (gLatest.ok) {
+        lastUpdateCheckEpoch = (uint32_t)nowEpoch;
+        rtcLatestOk = true;
+        strncpy(rtcLatestVersion, gLatest.version.c_str(),
+                sizeof(rtcLatestVersion) - 1);
+        rtcLatestVersion[sizeof(rtcLatestVersion) - 1] = '\0';
+        strncpy(rtcLatestUrl, gLatest.binUrl.c_str(),
+                sizeof(rtcLatestUrl) - 1);
+        rtcLatestUrl[sizeof(rtcLatestUrl) - 1] = '\0';
+      }
+    } else if (rtcLatestOk) {
+      gLatest.ok      = true;
+      gLatest.version = rtcLatestVersion;
+      gLatest.binUrl  = rtcLatestUrl;
+    }
+  }
   if (cfg.main.autoUpdateEnabled && gLatest.ok &&
       updater::isNewer(FIRMWARE_VERSION, gLatest.version)) {
     Serial.printf("[auto-update] %s -> %s (sofort)\n",
@@ -371,8 +408,9 @@ void setup() {
     Serial.printf("StayAwake noch %llu s\n",
                   (cfg.main.stayAwakeUntilMs - nowMs) / 1000ULL);
     delay(3000);
-    commands::processPending(idToken, deviceId, cfg);
-    cfg.load(idToken, deviceId);
+    bool changed = false;
+    commands::processPending(idToken, deviceId, cfg, &changed);
+    if (changed) cfg.load(idToken, deviceId);
     nowMs = (uint64_t)time(nullptr) * 1000ULL;
   }
 

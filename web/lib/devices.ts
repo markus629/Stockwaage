@@ -5,6 +5,8 @@ import {
   deleteField,
   doc,
   getDocs,
+  limit,
+  orderBy,
   query,
   serverTimestamp,
   setDoc,
@@ -278,6 +280,13 @@ export async function addScale(
 // Firestore-Batch-Limit ist 500 Ops; etwas Reserve lassen.
 const BATCH_SIZE = 450;
 
+// Obergrenze fuer das Bereinigen von Rohmesswerten beim Loeschen einer Waage.
+// Schuetzt das (kostenlose) Tages-Read-Budget vor einer Riesen-Collection.
+// Aeltere Readings raeumt ohnehin die Firestore-TTL weg (expireAt), und ein
+// verwaistes scales.<sid>-Feld in alten Docs ist unsichtbar (die Waage ist
+// aus der Config raus). ~20k deckt >200 Tage bei 15-min-Intervall ab.
+const MAX_READING_CLEANUP = 20000;
+
 async function deleteRefsInBatches(refs: DocumentReference[]): Promise<void> {
   for (let i = 0; i < refs.length; i += BATCH_SIZE) {
     const batch = writeBatch(db);
@@ -310,8 +319,12 @@ export async function removeScale(
   );
   await deleteRefsInBatches(cs.docs.map((d) => d.ref));
 
-  // 2) scales.<sid> aus allen readings entfernen (geteilte Dokumente).
-  const rs = await getDocs(readingsCol(deviceId));
+  // 2) scales.<sid> aus den (neuesten) readings entfernen (geteilte
+  //    Dokumente). Hart begrenzt, damit das Read-Budget nicht explodiert;
+  //    aeltere Readings verschwinden per TTL.
+  const rs = await getDocs(
+    query(readingsCol(deviceId), orderBy("ts", "desc"), limit(MAX_READING_CLEANUP)),
+  );
   await dropScaleFieldInBatches(
     rs.docs.map((d) => d.ref),
     scaleId,

@@ -20,6 +20,15 @@
 #endif
 #define GITHUB_RELEASES_URL \
   "https://api.github.com/repos/markus629/Stockwaage/releases/latest"
+// GitHub-Release-Check nur 1x/Tag (sonst 96 Calls/Tag -> Rate-Limit + Strom).
+#define UPDATE_CHECK_INTERVAL_SEC  86400
+
+// ----- Datenhaltung ---------------------------------------------------------
+// Rohmesswerte (readings) bekommen ein expireAt-Feld; eine Firestore-TTL-
+// Policy auf dieses Feld loescht sie automatisch nach Ablauf. Langzeitdaten
+// leben in dailyStats (1 Dok/Tag) und bleiben erhalten.
+// TTL-Policy einmalig einrichten (siehe README).
+#define READINGS_TTL_DAYS  60
 
 // ----- Hardware Pin-Belegung (ESP32-S3-WROOM-1 N16R8) -----------------------
 // Reserviert vom Chip/Modul: 19,20 (USB), 26-32 (SPI Flash), 33-37 (Octal

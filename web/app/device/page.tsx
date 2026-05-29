@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
+  getDocs,
   limit,
   onSnapshot,
   orderBy,
@@ -37,7 +38,13 @@ import ScaleCard from "@/components/ScaleCard";
 import SettingsPanel from "@/components/SettingsPanel";
 import { useDeviceTab, useScaleUiPrefs } from "@/lib/uiPrefs";
 
-const RAW_WINDOW_DAYS = 21;
+// Rohdaten werden NICHT mehr pauschal als 21-Tage-Live-Listener geladen
+// (das waren ~2000 Reads pro Seitenaufruf). Stattdessen lazy pro Tab und
+// nur so viele Tage wie der jeweilige Tab wirklich braucht – per getDocs
+// (einmalig) statt Live-Listener. Der aktuelle Messwert kommt weiter live
+// ueber `latest` (1 Dokument).
+const DASHBOARD_RAW_DAYS = 3;
+const DEFAULT_STACK_DAYS = 7;
 
 export default function Page() {
   return (
@@ -80,8 +87,10 @@ function DeviceDetail() {
   const [scales, setScales] = useState<Record<string, ScaleConfig>>({});
   const [latest, setLatest] = useState<Reading | null>(null);
   const [windowReadings, setWindowReadings] = useState<Reading[]>([]);
+  const [loadedRawDays, setLoadedRawDays] = useState(0);
   const [comments, setComments] = useState<Comment[]>([]);
   const [dailyStats, setDailyStats] = useState<DailyStat[]>([]);
+  const [dailyLoaded, setDailyLoaded] = useState(false);
   const [wizardFor, setWizardFor] = useState<string | null>(null);
   const uiPrefs = useScaleUiPrefs(deviceId);
   const [tab, setTab] = useDeviceTab(deviceId);
@@ -123,39 +132,76 @@ function DeviceDetail() {
         ),
       ),
     );
-    unsubs.push(
-      onSnapshot(
-        query(dailyStatsCol(deviceId), orderBy("date", "asc")),
-        (snap) => setDailyStats(snap.docs.map((d) => d.data() as DailyStat)),
-      ),
-    );
     return () => unsubs.forEach((u) => u());
-  }, [user, deviceId]);
-
-  useEffect(() => {
-    if (!user || user === "loading" || !deviceId) return;
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    // Rohdaten nur fuer den 24h-Stapel (max. Stepper = 21 Tage).
-    // Langzeit + Tages-Aenderung kommen aus dailyStats.
-    const cutoff = start.getTime() - (RAW_WINDOW_DAYS - 1) * 86_400_000;
-    const unsub = onSnapshot(
-      query(
-        readingsCol(deviceId),
-        where("ts", ">=", cutoff),
-        orderBy("ts", "asc"),
-      ),
-      (snap) => {
-        setWindowReadings(snap.docs.map((d) => d.data() as Reading));
-      },
-    );
-    return () => unsub();
   }, [user, deviceId]);
 
   const scaleIds = useMemo(
     () => Object.keys(scales).sort((a, b) => a.localeCompare(b)),
     [scales],
   );
+
+  // Beim Geraetewechsel die lazy geladenen Daten verwerfen.
+  useEffect(() => {
+    setWindowReadings([]);
+    setLoadedRawDays(0);
+    setDailyStats([]);
+    setDailyLoaded(false);
+  }, [deviceId]);
+
+  // Wie viele Tage Rohdaten braucht der aktuelle Tab?
+  //  - Dashboard: 3 Tage (Kacheln + Schwarm-Erkennung)
+  //  - Waagen: so viele Tage wie der groesste 24h-Stapel-Stepper
+  //  - Einstellungen: keine (nur `latest`)
+  const maxStackDays = scaleIds.length
+    ? Math.max(
+        ...scaleIds.map((sid) => uiPrefs.get(sid).stackDays ?? DEFAULT_STACK_DAYS),
+      )
+    : DASHBOARD_RAW_DAYS;
+  const neededRawDays =
+    tab === "dashboard"
+      ? DASHBOARD_RAW_DAYS
+      : tab === "scales"
+        ? maxStackDays
+        : 0;
+
+  // Rohdaten lazy per getDocs nachladen (einmalig, kein Live-Listener).
+  // Nur wenn der Tab mehr Tage braucht als bereits geladen sind.
+  useEffect(() => {
+    if (!user || user === "loading" || !deviceId) return;
+    if (neededRawDays === 0 || neededRawDays <= loadedRawDays) return;
+    let cancelled = false;
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const cutoff = start.getTime() - (neededRawDays - 1) * 86_400_000;
+    getDocs(
+      query(readingsCol(deviceId), where("ts", ">=", cutoff), orderBy("ts", "asc")),
+    ).then((snap) => {
+      if (cancelled) return;
+      setWindowReadings(snap.docs.map((d) => d.data() as Reading));
+      setLoadedRawDays(neededRawDays);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, deviceId, neededRawDays, loadedRawDays]);
+
+  // dailyStats (Langzeit/Tagesaggregate) ebenfalls lazy: nur in Dashboard +
+  // Waagen-Tab, einmalig per getDocs. In den Einstellungen gar nicht.
+  useEffect(() => {
+    if (!user || user === "loading" || !deviceId) return;
+    if (tab === "settings" || dailyLoaded) return;
+    let cancelled = false;
+    getDocs(query(dailyStatsCol(deviceId), orderBy("date", "asc"))).then(
+      (snap) => {
+        if (cancelled) return;
+        setDailyStats(snap.docs.map((d) => d.data() as DailyStat));
+        setDailyLoaded(true);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [user, deviceId, tab, dailyLoaded]);
 
   const pinOwners = useMemo(
     () => computePinOwners(scales, scaleIds, mainCfg),
@@ -237,6 +283,7 @@ function DeviceDetail() {
           scales={scales}
           scaleIds={scaleIds}
           mainCfg={mainCfg}
+          dailyStats={dailyStats}
         />
       )}
 

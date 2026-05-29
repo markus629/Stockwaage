@@ -40,6 +40,25 @@ Wake-Btn  ─┘                                                Waagen /
   Adressen, Wake-Button, Firmware-Update.
 - **Langzeit** – der ESP schreibt pro Tag ein Aggregat (`dailyStats`);
   der Graph liest 1 Dokument/Tag statt tausender Rohwerte.
+- **Schwarm-Alarm** – Dashboard-Kachel mit allen Waagen und einem grün/rot
+  Punkt: rot = plötzlicher Gewichtssturz (> 1,5 kg in < 30 min) in den
+  letzten Tagen. Rein clientseitig aus den Rohwerten berechnet.
+- **Futter-Reichweite** – Hochrechnung aus dem mittleren Tagesverbrauch der
+  letzten 3 Wochen (`dailyStats`): „reicht noch ~N Tage". Ebenfalls
+  clientseitig, kein Server.
+
+### Sparsamer Umgang mit dem Free-Plan (Reads/Writes)
+
+- Rohmesswerte (`readings`) bekommen ein `expireAt`-Feld; eine Firestore-**TTL-
+  Policy** löscht sie automatisch nach 60 Tagen. Langzeitdaten leben in
+  `dailyStats` und bleiben. → einmalig einrichten (siehe unten).
+- Das UI lädt Rohdaten **lazy pro Tab** und nur so viele Tage wie nötig
+  (Dashboard 3 Tage), per `getDocs` statt Dauer-Listener.
+- Namen-/Zahlenfelder schreiben erst nach kurzer Tipp-Pause (Debounce) bzw.
+  beim Verlassen des Feldes – nicht pro Tastendruck.
+- Die Firmware lädt die Waagen-Configs als ein Collection-Listing (statt 8
+  Einzel-GETs), lädt nach Commands nur bei echten Änderungen neu und prüft
+  GitHub-Releases nur 1×/Tag.
 
 ## Setup
 
@@ -56,6 +75,21 @@ firebase login
 firebase use stockwaage-132b6
 firebase deploy --only firestore:rules
 ```
+
+### 2b. TTL-Policy für `readings` (einmalig)
+Damit alte Rohmesswerte automatisch verschwinden (statt das Read-Budget und
+den Speicher zu sprengen), eine TTL-Policy auf das `expireAt`-Feld der
+`readings`-Collection-Group setzen. Per gcloud:
+```bash
+gcloud firestore fields ttls update expireAt \
+  --collection-group=readings \
+  --enable-ttl \
+  --project=stockwaage-132b6
+```
+Alternativ in der Firebase Console → Firestore → TTL → Policy hinzufügen,
+Collection `readings`, Feld `expireAt`. Die Firmware schreibt `expireAt`
+bereits bei jeder Messung (Standard: 60 Tage, `READINGS_TTL_DAYS` in
+`firmware/stockwaage/config.h`).
 
 ### 3. Web-UI lokal starten
 ```bash
@@ -104,3 +138,6 @@ und OTA. Kurz:
 - [x] Wake-Button (1× messen, 2× Messpause)
 - [x] OTA-Firmware-Update über GitHub Releases (manuell + automatisch)
 - [x] Mehrere Geräte (pro `deviceId`)
+- [x] Schwarm-Alarm + Futter-Reichweite (Dashboard, clientseitig)
+- [x] Free-Plan-Sparmaßnahmen: TTL auf `readings`, lazy Laden, Debounce,
+      Collection-Listing & 1×/Tag Update-Check in der Firmware

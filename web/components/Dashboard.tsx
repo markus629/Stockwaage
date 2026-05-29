@@ -13,11 +13,13 @@ import {
   YAxis,
 } from "recharts";
 import type {
+  DailyStat,
   MainConfig,
   Reading,
   ScaleConfig,
 } from "@/lib/devices";
 import ScaleChart from "./ScaleChart";
+import { FeedForecastTile, SwarmAlarmTile } from "./HiveStatus";
 
 const DASHBOARD_DAYS = 3;
 
@@ -26,6 +28,7 @@ type Props = {
   scales: Record<string, ScaleConfig>;
   scaleIds: string[];
   mainCfg: MainConfig;
+  dailyStats: DailyStat[];
 };
 
 export default function Dashboard({
@@ -33,6 +36,7 @@ export default function Dashboard({
   scales,
   scaleIds,
   mainCfg,
+  dailyStats,
 }: Props) {
   const windowReadings = useMemo(() => {
     const start = new Date();
@@ -56,12 +60,9 @@ export default function Dashboard({
     !!mainCfg.rainEnabled &&
     windowReadings.some((r) => r.rainRaw !== undefined);
 
+  const hasScales = scaleIds.length > 0;
   const empty =
-    dashboardScales.length === 0 &&
-    !showTemp &&
-    !showBattery &&
-    !showSolar &&
-    !showRain;
+    !hasScales && !showTemp && !showBattery && !showSolar && !showRain;
 
   if (empty) {
     return (
@@ -74,6 +75,23 @@ export default function Dashboard({
 
   return (
     <div className="grid gap-3 sm:grid-cols-2">
+      {hasScales && (
+        <>
+          <SwarmAlarmTile
+            readings={windowReadings}
+            dailyStats={dailyStats}
+            scales={scales}
+            scaleIds={scaleIds}
+          />
+          <FeedForecastTile
+            readings={windowReadings}
+            dailyStats={dailyStats}
+            scales={scales}
+            scaleIds={scaleIds}
+          />
+        </>
+      )}
+
       {dashboardScales.map((sid) => (
         <Tile
           key={sid}

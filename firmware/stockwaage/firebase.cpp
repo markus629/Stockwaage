@@ -2,6 +2,7 @@
 #include "config.h"
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
+#include <time.h>
 
 namespace {
 const char* kFirestoreBase =
@@ -174,6 +175,13 @@ void writeString(JsonObject fields, const char* key, const String& v) {
 }
 void writeBool(JsonObject fields, const char* key, bool v) {
   fields[key]["booleanValue"] = v;
+}
+void writeTimestamp(JsonObject fields, const char* key, time_t epochSec) {
+  struct tm tmv;
+  gmtime_r(&epochSec, &tmv);
+  char buf[24];  // "2026-05-29T12:00:00Z"
+  strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tmv);
+  fields[key]["timestampValue"] = buf;
 }
 
 } // namespace fb

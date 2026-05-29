@@ -40,7 +40,8 @@ bool markDone(const String& idToken, const String& deviceId, const String& cmdId
 namespace commands {
 
 bool processPending(const String& idToken, const String& deviceId,
-                    RuntimeConfig& cfg) {
+                    RuntimeConfig& cfg, bool* configChanged) {
+  if (configChanged) *configChanged = false;
   String resp;
   if (!fb::listDocs(idToken, commandsCollPath(deviceId), 20, resp)) return false;
   if (resp.length() == 0) return true;
@@ -159,10 +160,12 @@ bool processPending(const String& idToken, const String& deviceId,
     }
   }
 
+  bool anyScaleDirty = false;
   if (mainDirty) cfg.saveMain(idToken, deviceId);
   for (int i = 0; i < NUM_SCALES; i++) {
-    if (scaleDirty[i]) cfg.saveScale(idToken, deviceId, i);
+    if (scaleDirty[i]) { cfg.saveScale(idToken, deviceId, i); anyScaleDirty = true; }
   }
+  if (configChanged) *configChanged = mainDirty || anyScaleDirty;
 
   return allOk;
 }

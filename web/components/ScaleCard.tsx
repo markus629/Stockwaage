@@ -13,6 +13,7 @@ import {
 } from "@/lib/devices";
 import type { ConfigTab, ScaleUiPrefs } from "@/lib/uiPrefs";
 import CommentsSection from "./CommentsSection";
+import DebouncedInput from "./DebouncedInput";
 import DailyChangeChart from "./DailyChangeChart";
 import LearningPhase from "./LearningPhase";
 import PinSelect from "./PinSelect";
@@ -130,13 +131,13 @@ export default function ScaleCard({
         className="flex flex-wrap items-center gap-2 px-3 py-2.5 cursor-pointer select-none hover:bg-neutral-50"
       >
         <Chevron open={prefs.cardOpen} />
-        <input
+        <DebouncedInput
           type="text"
           value={cfg.name ?? ""}
           placeholder={scaleId}
           onClick={(e) => e.stopPropagation()}
-          onChange={(e) =>
-            updateScaleConfig(deviceId, scaleId, { name: e.target.value })
+          onCommit={(v) =>
+            updateScaleConfig(deviceId, scaleId, { name: v })
           }
           className="min-w-[100px] flex-1 rounded border border-neutral-200 px-2 py-0.5 text-sm"
         />
