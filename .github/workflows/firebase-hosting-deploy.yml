@@ -9,6 +9,12 @@ on:
       - ".github/workflows/firebase-hosting-deploy.yml"
   workflow_dispatch:
 
+# Node 20 wird auf den Runnern abgekuendigt. checkout/setup-node laufen ueber
+# v5 bereits auf Node 24; fuer die FirebaseExtended-Action (noch kein Node-24-
+# Release) opten wir per Flag in den Node-24-Modus.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
@@ -16,9 +22,9 @@ jobs:
       contents: read
       checks: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "20"
           cache: "npm"

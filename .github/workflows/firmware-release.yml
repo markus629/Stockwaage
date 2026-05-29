@@ -12,13 +12,19 @@ on:
       - ".github/workflows/firmware-release.yml"
   workflow_dispatch:
 
+# Node 20 wird auf den Runnern abgekuendigt. checkout laeuft ueber v5 auf
+# Node 24; fuer die uebrigen JS-Actions (cache, action-gh-release,
+# setup-arduino-cli) opten wir per Flag in den Node-24-Modus.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Determine version
         id: ver
