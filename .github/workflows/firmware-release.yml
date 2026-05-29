@@ -59,12 +59,21 @@ jobs:
             "Adafruit INA219" \
             "Adafruit Unified Sensor"
 
+      - name: Generate version header
+        # Robust statt -D'…="…"' (arduino-cli verschluckt die inneren Quotes,
+        # dann faellt FIRMWARE_VERSION auf "dev" zurueck). config.h zieht den
+        # Wert via __has_include aus dieser Datei.
+        run: |
+          printf '#define FIRMWARE_VERSION "%s"\n' \
+            "${{ steps.ver.outputs.version }}" \
+            > firmware/stockwaage/fw_version.h
+          cat firmware/stockwaage/fw_version.h
+
       - name: Compile
         run: |
           mkdir -p build
           arduino-cli compile \
             --fqbn "esp32:esp32:esp32s3:PSRAM=opi,FlashSize=16M,PartitionScheme=custom" \
-            --build-property 'compiler.cpp.extra_flags=-DFIRMWARE_VERSION="${{ steps.ver.outputs.version }}"' \
             --output-dir build \
             firmware/stockwaage
 

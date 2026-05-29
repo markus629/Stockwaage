@@ -13,8 +13,17 @@
 #define OWNER_UID           "F1k284u9bmbJcOkEqt7O8BNOLN53"
 
 // ----- Firmware Version + Update --------------------------------------------
-// FIRMWARE_VERSION wird beim CI-Build aus dem Git-Tag gesetzt (-D Flag).
-// Lokale Arduino-IDE-Builds laufen ohne und zeigen "dev".
+// FIRMWARE_VERSION wird beim CI-Build aus dem Git-Tag gesetzt: der Workflow
+// generiert dazu fw_version.h mit dem passenden #define. Ein per -D gesetzter
+// Wert hat ebenfalls Vorrang. Lokale Arduino-IDE-Builds (ohne fw_version.h)
+// zeigen "dev".
+#ifndef FIRMWARE_VERSION
+  #if defined(__has_include)
+    #if __has_include("fw_version.h")
+      #include "fw_version.h"
+    #endif
+  #endif
+#endif
 #ifndef FIRMWARE_VERSION
 #define FIRMWARE_VERSION    "dev"
 #endif

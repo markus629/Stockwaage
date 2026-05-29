@@ -5,6 +5,7 @@ web/out/
 
 # Arduino build outputs
 firmware/**/build/
+firmware/stockwaage/fw_version.h
 *.bin
 *.log
 npm-debug.log*
