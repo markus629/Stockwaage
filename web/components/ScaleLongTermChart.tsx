@@ -22,11 +22,18 @@ type Props = {
 
 type RangeOption = { label: string; days: number | "all" };
 const RANGES: RangeOption[] = [
-  { label: "30 T", days: 30 },
-  { label: "90 T", days: 90 },
+  { label: "3 T", days: 3 },
+  { label: "1 W", days: 7 },
+  { label: "2 W", days: 14 },
+  { label: "3 W", days: 21 },
+  { label: "1 M", days: 30 },
+  { label: "2 M", days: 60 },
+  { label: "3 M", days: 90 },
+  { label: "6 M", days: 180 },
   { label: "1 J", days: 365 },
   { label: "Alle", days: "all" },
 ];
+const DEFAULT_RANGE_IDX = 4; // 1 M
 
 const TARGET_POINTS = 120;
 
@@ -110,10 +117,11 @@ export default function ScaleLongTermChart({
   stats,
   comments,
 }: Props) {
-  const [range, setRange] = useState<number | "all">(90);
+  const [rangeIdx, setRangeIdx] = useState<number>(DEFAULT_RANGE_IDX);
   const [popup, setPopup] = useState<{ label: string; items: Comment[] } | null>(
     null,
   );
+  const range = RANGES[rangeIdx].days;
 
   const data = useMemo(
     () => buildBuckets(stats, scaleId, range, comments),
@@ -127,21 +135,28 @@ export default function ScaleLongTermChart({
         <span className="text-[10px] uppercase tracking-wide text-neutral-500">
           Langzeit (Ø/Tag, Min–Max)
         </span>
-        <div className="ml-auto flex gap-1">
-          {RANGES.map((r) => (
-            <button
-              key={r.label}
-              type="button"
-              onClick={() => setRange(r.days)}
-              className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                range === r.days
-                  ? "bg-neutral-900 text-white"
-                  : "border border-neutral-300 text-neutral-600 hover:bg-neutral-100"
-              }`}
-            >
-              {r.label}
-            </button>
-          ))}
+        <div className="ml-auto flex items-center gap-1.5">
+          <button
+            type="button"
+            aria-label="kürzerer Zeitraum"
+            disabled={rangeIdx <= 0}
+            onClick={() => setRangeIdx((i) => i - 1)}
+            className="rounded border border-neutral-300 px-1.5 leading-none text-neutral-600 hover:bg-neutral-100 disabled:opacity-30"
+          >
+            ‹
+          </button>
+          <span className="min-w-[3rem] text-center text-xs font-medium tabular-nums">
+            {RANGES[rangeIdx].label}
+          </span>
+          <button
+            type="button"
+            aria-label="längerer Zeitraum"
+            disabled={rangeIdx >= RANGES.length - 1}
+            onClick={() => setRangeIdx((i) => i + 1)}
+            className="rounded border border-neutral-300 px-1.5 leading-none text-neutral-600 hover:bg-neutral-100 disabled:opacity-30"
+          >
+            ›
+          </button>
         </div>
         {bucketDays > 1 && (
           <span className="w-full text-[10px] text-neutral-400">
