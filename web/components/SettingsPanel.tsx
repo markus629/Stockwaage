@@ -23,17 +23,12 @@ import {
 } from "@/lib/devices";
 import PinSelect from "./PinSelect";
 
-const DAYS_MIN = 1;
-const DAYS_MAX = 30;
-
 type Props = {
   deviceId: string;
   device: Device | null;
   mainCfg: MainConfig;
   latest: Reading | null;
   intervalSecFallback?: number;
-  days: number;
-  onDaysChange: (n: number) => void;
   pinOwners: Record<number, string>;
 };
 
@@ -48,8 +43,6 @@ export default function SettingsPanel({
   mainCfg,
   latest,
   intervalSecFallback,
-  days,
-  onDaysChange,
   pinOwners,
 }: Props) {
   const i2cSda = mainCfg.i2cSda ?? DEFAULT_I2C_SDA;
@@ -73,21 +66,6 @@ export default function SettingsPanel({
               className="mt-1 w-full rounded border border-neutral-300 px-2 py-1"
             />
             <Hint>Wirkt ab nächstem ESP-Wakeup.</Hint>
-          </Field>
-          <Field label={`Verlauf: Anzahl Tage (${DAYS_MIN}–${DAYS_MAX})`}>
-            <input
-              type="number"
-              min={DAYS_MIN}
-              max={DAYS_MAX}
-              value={days}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10);
-                if (!isNaN(v))
-                  onDaysChange(Math.max(DAYS_MIN, Math.min(DAYS_MAX, v)));
-              }}
-              className="mt-1 w-full rounded border border-neutral-300 px-2 py-1"
-            />
-            <Hint>Heute = rot/dick, älteste = blau/dünn.</Hint>
           </Field>
         </div>
       </Section>

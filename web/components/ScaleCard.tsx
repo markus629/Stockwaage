@@ -250,8 +250,13 @@ export default function ScaleCard({
             )}
           </div>
 
-          <ScaleChart scaleId={scaleId} readings={readings} />
-          <DailyChangeChart scaleId={scaleId} readings={readings} />
+          <ScaleChart
+            scaleId={scaleId}
+            readings={readings}
+            days={prefs.stackDays}
+            onDaysChange={(n) => onPrefsChange({ stackDays: n })}
+          />
+          <DailyChangeChart scaleId={scaleId} stats={dailyStats} />
           <ScaleLongTermChart
             scaleId={scaleId}
             stats={dailyStats}

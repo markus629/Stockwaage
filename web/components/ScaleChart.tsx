@@ -11,10 +11,13 @@ import {
   YAxis,
 } from "recharts";
 import type { Reading } from "@/lib/devices";
+import { STACK_DAY_STEPS } from "@/lib/uiPrefs";
 
 type Props = {
   scaleId: string;
   readings: Reading[];
+  days?: number; // Anzahl gestapelter Tage; ohne -> alle in readings
+  onDaysChange?: (n: number) => void; // gesetzt -> Stepper anzeigen
 };
 
 function localDayKey(ts: number): string {
@@ -48,10 +51,24 @@ function formatDayLabel(key: string): string {
   return `${String(d).padStart(2, "0")}.${String(m).padStart(2, "0")}.`;
 }
 
-export default function ScaleChart({ scaleId, readings }: Props) {
+export default function ScaleChart({
+  scaleId,
+  readings,
+  days,
+  onDaysChange,
+}: Props) {
   const { data, dayKeys } = useMemo(() => {
+    const cutoff =
+      days === undefined
+        ? -Infinity
+        : (() => {
+            const start = new Date();
+            start.setHours(0, 0, 0, 0);
+            return start.getTime() - (days - 1) * 86_400_000;
+          })();
     const points: Array<{ kg: number; day: string; minute: number; hour: number }> = [];
     for (const r of readings) {
+      if (r.ts < cutoff) continue;
       const kg = r.scales?.[scaleId]?.kg;
       if (kg === undefined || kg === null || !isFinite(kg)) continue;
       const hour = hoursOfDay(r.ts);
@@ -81,18 +98,57 @@ export default function ScaleChart({ scaleId, readings }: Props) {
       (a, b) => (a.hour as number) - (b.hour as number),
     );
     return { data: arr, dayKeys: keys };
-  }, [readings, scaleId]);
+  }, [readings, scaleId, days]);
+
+  const idx = STACK_DAY_STEPS.indexOf(
+    (days ?? 7) as (typeof STACK_DAY_STEPS)[number],
+  );
+  const curIdx = idx < 0 ? STACK_DAY_STEPS.indexOf(7) : idx;
+  const stepper = !onDaysChange ? null : (
+    <div className="mb-1 flex items-center justify-between">
+      <span className="text-[10px] uppercase tracking-wide text-neutral-500">
+        Tagesverlauf
+      </span>
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          aria-label="weniger Tage"
+          disabled={curIdx <= 0}
+          onClick={() => onDaysChange?.(STACK_DAY_STEPS[curIdx - 1])}
+          className="rounded border border-neutral-300 px-1.5 leading-none text-neutral-600 hover:bg-neutral-100 disabled:opacity-30"
+        >
+          ‹
+        </button>
+        <span className="min-w-[3.5rem] text-center text-xs font-medium tabular-nums">
+          {days} {days === 1 ? "Tag" : "Tage"}
+        </span>
+        <button
+          type="button"
+          aria-label="mehr Tage"
+          disabled={curIdx >= STACK_DAY_STEPS.length - 1}
+          onClick={() => onDaysChange?.(STACK_DAY_STEPS[curIdx + 1])}
+          className="rounded border border-neutral-300 px-1.5 leading-none text-neutral-600 hover:bg-neutral-100 disabled:opacity-30"
+        >
+          ›
+        </button>
+      </div>
+    </div>
+  );
 
   if (data.length === 0) {
     return (
-      <div className="mt-3 flex h-32 items-center justify-center rounded border border-dashed border-neutral-200 text-xs text-neutral-400">
-        Noch keine Verlaufsdaten
+      <div className="mt-3">
+        {stepper}
+        <div className="flex h-32 items-center justify-center rounded border border-dashed border-neutral-200 text-xs text-neutral-400">
+          Noch keine Verlaufsdaten
+        </div>
       </div>
     );
   }
 
   return (
     <div className="mt-3">
+      {stepper}
       <div className="h-40 w-full">
         <ResponsiveContainer>
           <LineChart

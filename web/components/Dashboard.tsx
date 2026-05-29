@@ -80,7 +80,7 @@ export default function Dashboard({
           title={scales[sid]?.name || sid}
           subtitle={sid}
         >
-          <ScaleChart scaleId={sid} readings={windowReadings} />
+          <ScaleChart scaleId={sid} readings={windowReadings} days={3} />
         </Tile>
       ))}
 

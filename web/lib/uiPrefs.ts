@@ -38,12 +38,17 @@ export type ScaleUiPrefs = {
   cardOpen: boolean;
   configOpen: boolean;
   configTab: ConfigTab;
+  stackDays: number; // 24h-Stapel: Anzahl uebereinandergelegter Tage
 };
+
+// Stufen fuer den 24h-Stapel-Stepper.
+export const STACK_DAY_STEPS = [1, 2, 3, 5, 7, 10, 14, 21] as const;
 
 export const DEFAULT_SCALE_PREFS: ScaleUiPrefs = {
   cardOpen: true,
   configOpen: false,
   configTab: "calib",
+  stackDays: 7,
 };
 
 type AllPrefs = Record<string, ScaleUiPrefs>;

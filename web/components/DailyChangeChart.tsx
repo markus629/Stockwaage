@@ -11,47 +11,38 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { Reading } from "@/lib/devices";
+import type { DailyStat } from "@/lib/devices";
+
+const FIXED_DAYS = 30;
 
 type Props = {
   scaleId: string;
-  readings: Reading[];
+  stats: DailyStat[];
 };
-
-function localDayKey(ts: number): string {
-  const d = new Date(ts);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 function formatDayLabel(key: string): string {
   const [, m, d] = key.split("-");
   return `${d}.${m}.`;
 }
 
-export default function DailyChangeChart({ scaleId, readings }: Props) {
+export default function DailyChangeChart({ scaleId, stats }: Props) {
   const data = useMemo(() => {
-    // Letzten Wert pro Tag bestimmen.
-    const lastByDay = new Map<string, { ts: number; kg: number }>();
-    for (const r of readings) {
-      const kg = r.scales?.[scaleId]?.kg;
-      if (kg === undefined || kg === null || !isFinite(kg)) continue;
-      const day = localDayKey(r.ts);
-      const prev = lastByDay.get(day);
-      if (!prev || r.ts > prev.ts) lastByDay.set(day, { ts: r.ts, kg });
+    // Tages-Schlussgewicht (last) je Tag aus den Aggregaten.
+    const closeByDay = new Map<string, number>();
+    for (const s of stats) {
+      const agg = s.scales?.[scaleId];
+      if (!agg || agg.count <= 0 || !isFinite(agg.last)) continue;
+      closeByDay.set(s.date, agg.last);
     }
-    const days = Array.from(lastByDay.keys()).sort();
+    const days = Array.from(closeByDay.keys()).sort();
     const out: Array<{ day: string; delta: number; close: number }> = [];
     for (let i = 1; i < days.length; i++) {
-      const prev = lastByDay.get(days[i - 1])!;
-      const cur = lastByDay.get(days[i])!;
-      out.push({
-        day: days[i],
-        delta: cur.kg - prev.kg,
-        close: cur.kg,
-      });
+      const prev = closeByDay.get(days[i - 1])!;
+      const cur = closeByDay.get(days[i])!;
+      out.push({ day: days[i], delta: cur - prev, close: cur });
     }
-    return out;
-  }, [readings, scaleId]);
+    return out.slice(-FIXED_DAYS);
+  }, [stats, scaleId]);
 
   if (data.length === 0) {
     return (
@@ -64,7 +55,7 @@ export default function DailyChangeChart({ scaleId, readings }: Props) {
   return (
     <div className="mt-3">
       <p className="mb-1 text-[10px] uppercase tracking-wide text-neutral-500">
-        Eintrag pro Tag (Δ zum Vortag)
+        Eintrag pro Tag (Δ zum Vortag, letzte {FIXED_DAYS} Tage)
       </p>
       <div className="h-32 w-full">
         <ResponsiveContainer>

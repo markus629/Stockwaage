@@ -37,7 +37,7 @@ import ScaleCard from "@/components/ScaleCard";
 import SettingsPanel from "@/components/SettingsPanel";
 import { useDeviceTab, useScaleUiPrefs } from "@/lib/uiPrefs";
 
-const DAYS_DEFAULT = 7;
+const RAW_WINDOW_DAYS = 21;
 
 export default function Page() {
   return (
@@ -83,7 +83,6 @@ function DeviceDetail() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [dailyStats, setDailyStats] = useState<DailyStat[]>([]);
   const [wizardFor, setWizardFor] = useState<string | null>(null);
-  const [days, setDays] = useState<number>(DAYS_DEFAULT);
   const uiPrefs = useScaleUiPrefs(deviceId);
   const [tab, setTab] = useDeviceTab(deviceId);
 
@@ -137,9 +136,9 @@ function DeviceDetail() {
     if (!user || user === "loading" || !deviceId) return;
     const start = new Date();
     start.setHours(0, 0, 0, 0);
-    // Dashboard zeigt fix 3 Tage -> mindestens so viel laden.
-    const effectiveDays = Math.max(days, 3);
-    const cutoff = start.getTime() - (effectiveDays - 1) * 24 * 3600 * 1000;
+    // Rohdaten nur fuer den 24h-Stapel (max. Stepper = 21 Tage).
+    // Langzeit + Tages-Aenderung kommen aus dailyStats.
+    const cutoff = start.getTime() - (RAW_WINDOW_DAYS - 1) * 86_400_000;
     const unsub = onSnapshot(
       query(
         readingsCol(deviceId),
@@ -151,7 +150,7 @@ function DeviceDetail() {
       },
     );
     return () => unsub();
-  }, [user, deviceId, days]);
+  }, [user, deviceId]);
 
   const scaleIds = useMemo(
     () => Object.keys(scales).sort((a, b) => a.localeCompare(b)),
@@ -291,8 +290,6 @@ function DeviceDetail() {
           mainCfg={mainCfg}
           latest={latest}
           intervalSecFallback={device?.intervalSec}
-          days={days}
-          onDaysChange={setDays}
           pinOwners={pinOwners}
         />
       )}
