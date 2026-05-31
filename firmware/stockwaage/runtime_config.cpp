@@ -40,6 +40,8 @@ bool RuntimeConfig::load(const String& idToken, const String& deviceId) {
                                                        main.intervalSec);
       main.stayAwakeUntilMs = (uint64_t)fb::readInteger(
                                   fields["stayAwakeUntilMs"], 0);
+      main.sckPin           = (int)fb::readInteger(fields["sckPin"],
+                                                   main.sckPin);
       main.i2cSda           = (int)fb::readInteger(fields["i2cSda"],
                                                    main.i2cSda);
       main.i2cScl           = (int)fb::readInteger(fields["i2cScl"],

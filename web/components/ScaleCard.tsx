@@ -358,6 +358,10 @@ function PinPanel({
   pinOwners: Record<number, string>;
 }) {
   const currentPin = cfg.dtPin ?? DEFAULT_DT_PIN[scaleId];
+  // SCK-Pin aus der Owner-Map ableiten (in den Einstellungen konfiguriert).
+  const sckPin = Object.entries(pinOwners).find(
+    ([, label]) => label === "HX711 SCK",
+  )?.[0];
   return (
     <div className="text-sm">
       <label className="block">
@@ -372,8 +376,10 @@ function PinPanel({
         />
       </label>
       <p className="mt-2 text-xs text-neutral-500">
-        SCK liegt fest auf GPIO 4 (alle Waagen teilen sich SCK). Pin-Änderung
-        wirkt beim nächsten ESP-Wakeup.
+        Das ist der Daten-Pin (DT) dieser Waage. Der gemeinsame Clock-Pin
+        (SCK{sckPin ? ` = GPIO ${sckPin}` : ""}) gilt für alle Waagen und wird
+        in den Einstellungen gesetzt. Pin-Änderung wirkt beim nächsten
+        ESP-Wakeup.
       </p>
     </div>
   );

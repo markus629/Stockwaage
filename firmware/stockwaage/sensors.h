@@ -28,8 +28,9 @@ void initEnv(const MainConfig& cfg);
 
 // HX711-Instanzen mit den Pins aus der Runtime-Config initialisieren.
 // dtPins[i] <= 0 -> Waage i ist deaktiviert (kein HX711-init, kein Read).
-// Doppelte Pins werden ignoriert (nur erstes Vorkommen wird aktiv).
-void initScales(const int dtPins[NUM_SCALES]);
+// sckPin = gemeinsamer Clock-Pin aller Waagen. Doppelte Pins werden
+// ignoriert (nur erstes Vorkommen wird aktiv).
+void initScales(const int dtPins[NUM_SCALES], int sckPin);
 
 // liest alle aktiven HX711 in den Out-Array (Laenge NUM_SCALES).
 // Wert = NAN bei Timeout oder wenn Waage nicht aktiv ist.

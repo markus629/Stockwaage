@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import {
   ALLOWED_I2C_PINS,
   ALLOWED_RAIN_PINS,
+  ALLOWED_SCK_PINS,
   ALLOWED_WAKE_PINS,
+  DEFAULT_HX711_SCK,
   BME280_ADDRS,
   DEFAULT_BME280_ADDR,
   DEFAULT_SWARM_DROP_KG,
@@ -97,6 +99,26 @@ export default function SettingsPanel({
             </Hint>
           </Field>
         </div>
+      </Section>
+
+      <Section
+        title="Waagen-Bus (HX711)"
+        subtitle="Alle Wägezellen teilen sich einen gemeinsamen Clock-Pin (SCK). Die Daten-Pins (DT) stellst du je Waage im Tab „Waagen“ ein."
+      >
+        <Field label="SCK-Pin (GPIO, gemeinsam)">
+          <PinSelect
+            value={mainCfg.sckPin ?? DEFAULT_HX711_SCK}
+            allowed={ALLOWED_SCK_PINS}
+            onChange={(v) => updateMainConfig(deviceId, { sckPin: v })}
+            pinOwners={pinOwners}
+            ownerKey="HX711 SCK"
+            defaultMarker={DEFAULT_HX711_SCK}
+          />
+          <Hint>
+            Standard GPIO 4. Wirkt beim nächsten ESP-Wakeup (bzw. sofort, wenn
+            Deep Sleep aus ist).
+          </Hint>
+        </Field>
       </Section>
 
       <Section

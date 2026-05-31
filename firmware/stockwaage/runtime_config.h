@@ -19,6 +19,7 @@ struct ScaleConfig {
 struct MainConfig {
   uint32_t intervalSec        = DEFAULT_INTERVAL_SEC;
   uint64_t stayAwakeUntilMs   = 0;       // ESP bleibt wach bis hier
+  int      sckPin             = PIN_HX711_SCK;  // gemeinsamer HX711-SCK
   int      i2cSda             = 8;
   int      i2cScl             = 9;
   bool     bme280Enabled      = false;

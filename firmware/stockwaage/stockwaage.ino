@@ -295,7 +295,7 @@ void initSensorsFromCfg() {
     // Waagen ohne Doku (exists=false) ueberspringen -> dtPin=-1.
     dtPins[i] = cfg.scales[i].exists ? cfg.scales[i].dtPin : -1;
   }
-  sensors::initScales(dtPins);
+  sensors::initScales(dtPins, cfg.main.sckPin);
   sensors::initEnv(cfg.main);
 }
 

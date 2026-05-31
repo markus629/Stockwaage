@@ -36,6 +36,8 @@ export type MainConfig = {
   // false = ESP bleibt wach (kein Deep Sleep): Einstellungen/Updates greifen
   // sofort, dafuer hoeherer Stromverbrauch. Default true.
   deepSleepEnabled?: boolean;
+  // Gemeinsamer HX711-Clock-Pin (alle Waagen teilen sich SCK). Default 4.
+  sckPin?: number;
   // I2C-Bus (geteilt von BME280 + INA219)
   i2cSda?: number;
   i2cScl?: number;
@@ -201,6 +203,11 @@ export const SCALE_SLOTS = Array.from(
 export const ALLOWED_DT_PINS = [
   5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 21, 38, 39, 40, 41, 42, 47,
 ] as const;
+
+// SCK ist ein normaler Digital-Output -> gleiche sicheren Pins wie DT, plus
+// die historische Default-Belegung GPIO 4 (die nicht in der DT-Liste steht).
+export const DEFAULT_HX711_SCK = 4;
+export const ALLOWED_SCK_PINS: readonly number[] = [4, ...ALLOWED_DT_PINS];
 
 // Default-Pinbelegung pro Slot, identisch zur ESP-Firmware (config.h).
 export const DEFAULT_DT_PIN: Record<string, number> = {
@@ -390,9 +397,13 @@ export function computePinOwners(
 ): Record<number, string> {
   const map: Record<number, string> = {
     0: "Portal-Button",
-    4: "HX711 SCK",
     1: "VBat ADC",
   };
+  // Gemeinsamer SCK-Pin (konfigurierbar) vor den DT-Pins reservieren.
+  const sck = mainCfg.sckPin ?? DEFAULT_HX711_SCK;
+  if (typeof sck === "number" && sck > 0 && map[sck] === undefined) {
+    map[sck] = "HX711 SCK";
+  }
   for (const sid of scaleIds) {
     const pin = scales[sid]?.dtPin ?? DEFAULT_DT_PIN[sid];
     if (typeof pin === "number" && pin > 0 && map[pin] === undefined) {
