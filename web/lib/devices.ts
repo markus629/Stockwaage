@@ -200,20 +200,19 @@ export const SCALE_SLOTS = Array.from(
   (_, i) => `s${i + 1}`,
 );
 
-// ESP32 GPIOs die als HX711-DT (Input) sicher nutzbar sind.
-// Reserviert: 0 (Portal-Button), 1/3 (Serial), 4 (HX711 SCK), 6-11 (Flash),
-// 12 (Boot-Strap LOW), 23 (OneWire), 32 (VBat).
-// HX711 DT braucht nur Digital-Output-faehig. Auf S3: 5-18, 21, 38-42, 47.
-// Vermieden: SCK (4), VBat (1), Strapping (0,3,45,46), USB (19,20),
-// UART0 (43,44), SPI Flash (26-32), Octal-PSRAM (33-37), LED (48).
+// ESP32-S3 GPIOs die als HX711-DT sicher nutzbar sind.
+// GPIO 4 ist jetzt dabei: war frueher fest der SCK, der ist aber inzwischen
+// konfigurierbar. Kollisionen (DT == aktueller SCK) sperrt computePinOwners
+// dynamisch.
+// Vermieden: VBat (1), Strapping (0,3,45,46), USB (19,20), UART0 (43,44),
+// SPI Flash (26-32), Octal-PSRAM (33-37), LED (48).
 export const ALLOWED_DT_PINS = [
-  5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 21, 38, 39, 40, 41, 42, 47,
+  4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 21, 38, 39, 40, 41, 42, 47,
 ] as const;
 
-// SCK ist ein normaler Digital-Output -> gleiche sicheren Pins wie DT, plus
-// die historische Default-Belegung GPIO 4 (die nicht in der DT-Liste steht).
+// SCK ist ein normaler Digital-Output -> dieselben sicheren Pins wie DT.
 export const DEFAULT_HX711_SCK = 4;
-export const ALLOWED_SCK_PINS: readonly number[] = [4, ...ALLOWED_DT_PINS];
+export const ALLOWED_SCK_PINS: readonly number[] = ALLOWED_DT_PINS;
 
 // Default-Pinbelegung pro Slot, identisch zur ESP-Firmware (config.h).
 export const DEFAULT_DT_PIN: Record<string, number> = {
