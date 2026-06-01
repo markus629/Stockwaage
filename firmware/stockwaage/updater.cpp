@@ -76,15 +76,46 @@ bool isNewer(const String& local, const String& remote) {
 }
 
 bool applyUpdate(const String& binUrl) {
-  Serial.printf("[update] downloading %s\n", binUrl.c_str());
   WiFiClientSecure client;
   client.setInsecure();  // GitHub: kein CA-Bundle, Vertrauen via DNS+TLS
+
   // GitHub-Asset-URLs (releases/download/...) antworten mit 302 auf
-  // objects.githubusercontent.com. Ohne Redirect-Folgen schlaegt der
-  // Download fehl -> zwingend folgen.
-  httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
+  // objects.githubusercontent.com. Das Folgen des Redirects ueberlassen wir
+  // NICHT dem httpUpdate (auf dem ESP32 unzuverlaessig bei Host-Wechsel),
+  // sondern loesen die finale URL selbst per HEAD auf.
+  String url = binUrl;
+  for (int hop = 0; hop < 6; hop++) {
+    HTTPClient http;
+    if (!http.begin(client, url)) {
+      Serial.println("[update] http.begin fehlgeschlagen");
+      return false;
+    }
+    http.addHeader("User-Agent", "Stockwaage-ESP");
+    http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
+    const char* collect[] = { "Location" };
+    http.collectHeaders(collect, 1);
+    int code = http.sendRequest("HEAD");
+    Serial.printf("[update] HEAD -> %d (%s)\n", code, url.c_str());
+    if (code == HTTP_CODE_MOVED_PERMANENTLY || code == HTTP_CODE_FOUND ||
+        code == HTTP_CODE_TEMPORARY_REDIRECT || code == 308) {
+      String loc = http.header("Location");
+      http.end();
+      if (loc.length() == 0) {
+        Serial.println("[update] Redirect ohne Location-Header");
+        return false;
+      }
+      url = loc;
+      continue;  // naechster Hop
+    }
+    http.end();
+    break;  // kein Redirect mehr -> url ist final
+  }
+
+  Serial.printf("[update] downloading %s (freier Heap: %u)\n",
+                url.c_str(), (unsigned)ESP.getFreeHeap());
   httpUpdate.rebootOnUpdate(true);
-  t_httpUpdate_return ret = httpUpdate.update(client, binUrl);
+  httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);  // Sicherheitsnetz
+  t_httpUpdate_return ret = httpUpdate.update(client, url);
   switch (ret) {
     case HTTP_UPDATE_FAILED:
       Serial.printf("[update] FAILED (%d): %s\n",
