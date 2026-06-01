@@ -383,6 +383,7 @@ function DeviceDetail() {
           deviceId={deviceId}
           scale={scales[wizardFor] ?? { id: wizardFor }}
           latestRaw={current?.scales?.[wizardFor]?.raw}
+          deepSleep={mainCfg.deepSleepEnabled ?? true}
           onClose={() => setWizardFor(null)}
         />
       )}

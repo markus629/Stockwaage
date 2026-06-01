@@ -21,6 +21,7 @@ type Props = {
   deviceId: string;
   scale: ScaleConfig;
   latestRaw?: number;
+  deepSleep: boolean;
   onClose: () => void;
 };
 
@@ -30,13 +31,18 @@ export default function CalibrationWizard({
   deviceId,
   scale,
   latestRaw,
+  deepSleep,
   onClose,
 }: Props) {
-  const [step, setStep] = useState<Step>("stayAwake");
+  // Bei ausgeschaltetem Deep Sleep ist der ESP wach und pollt Commands im
+  // Sekundentakt -> der "wachkuessen"-Schritt entfaellt, wir starten direkt
+  // bei der Tare.
+  const [step, setStep] = useState<Step>(deepSleep ? "stayAwake" : "tare");
   const [pendingCmdId, setPendingCmdId] = useState<string | null>(null);
   const [pendingCmd, setPendingCmd] = useState<Command | null>(null);
   const [knownKg, setKnownKg] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [slow, setSlow] = useState(false);
 
   // Subscribe auf den aktuell laufenden Command, um done/error zu sehen
   useEffect(() => {
@@ -69,6 +75,15 @@ export default function CalibrationWizard({
       setPendingCmdId(null);
     }
   }, [pendingCmd]);
+
+  // Wartet zu lange? Nach ein paar Sekunden einen Hinweis einblenden, damit
+  // der Wizard nicht stumm "ewig" haengt.
+  useEffect(() => {
+    setSlow(false);
+    if (!pendingCmdId) return;
+    const t = setTimeout(() => setSlow(true), 12000);
+    return () => clearTimeout(t);
+  }, [pendingCmdId]);
 
   async function fire(
     type: Command["type"],
@@ -104,6 +119,15 @@ export default function CalibrationWizard({
         {error && (
           <div className="mb-3 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
             {error}
+          </div>
+        )}
+
+        {waiting && slow && (
+          <div className="mb-3 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
+            Noch keine Antwort vom ESP.{" "}
+            {deepSleep
+              ? "Bei aktivem Deep Sleep reagiert er erst beim nächsten Aufwachen – drück den Wake-/Reset-Taster am ESP, um es zu beschleunigen."
+              : "Prüfe, ob der ESP online ist (auf der Geräteseite „zuletzt gesehen“ / grüner Punkt). Hat er Deep Sleep gerade erst ausgeschaltet, wacht er evtl. noch einmal auf – kurz den Reset-Taster drücken hilft."}
           </div>
         )}
 
