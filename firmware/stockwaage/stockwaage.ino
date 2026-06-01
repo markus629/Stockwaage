@@ -346,9 +346,11 @@ void runAwakeMode() {
   uint32_t lastLiveMs    = millis();
   uint32_t lastPollMs    = millis();
   uint32_t lastLoginMs   = millis();
+  uint32_t lastUpdateChkMs = millis();
   const uint32_t LOGIN_REFRESH_MS = 50UL * 60UL * 1000UL;  // Token < 1h gueltig
-  const uint32_t LIVE_MS = 5000;   // Live-Gewicht-Takt
-  const uint32_t POLL_MS = 5000;   // Commands + Config
+  const uint32_t LIVE_MS   = 5000;             // Live-Gewicht-Takt
+  const uint32_t POLL_MS   = 5000;             // Commands + Config
+  const uint32_t UPDATE_CHK_MS = 15UL * 60UL * 1000UL;  // Update-Check (wach)
 
   while (true) {
     delay(500);
@@ -363,6 +365,30 @@ void runAwakeMode() {
     if (millis() - lastLoginMs >= LOGIN_REFRESH_MS) {
       auto lr = fb::login(FIREBASE_EMAIL, firebasePassword);
       if (lr.ok) { idToken = lr.idToken; lastLoginMs = millis(); }
+    }
+
+    // Im Wachbetrieb bootet der ESP nie -> ohne diese Pruefung wuerde er neue
+    // Releases nie bemerken. Daher regelmaessig nachsehen: gLatest (fuer den
+    // Heartbeat/das UI) auffrischen und bei Auto-Update selbst flashen.
+    if (millis() - lastUpdateChkMs >= UPDATE_CHK_MS) {
+      updater::LatestInfo li = updater::fetchLatest();
+      if (li.ok) {
+        gLatest = li;
+        rtcLatestOk = true;
+        strncpy(rtcLatestVersion, li.version.c_str(),
+                sizeof(rtcLatestVersion) - 1);
+        rtcLatestVersion[sizeof(rtcLatestVersion) - 1] = '\0';
+        strncpy(rtcLatestUrl, li.binUrl.c_str(), sizeof(rtcLatestUrl) - 1);
+        rtcLatestUrl[sizeof(rtcLatestUrl) - 1] = '\0';
+        lastUpdateCheckEpoch = (uint32_t)time(nullptr);
+        if (cfg.main.autoUpdateEnabled &&
+            updater::isNewer(FIRMWARE_VERSION, li.version)) {
+          Serial.printf("[awake] Auto-Update %s -> %s\n",
+                        FIRMWARE_VERSION, li.version.c_str());
+          updater::applyUpdate(li.binUrl);  // rebootet bei Erfolg
+        }
+      }
+      lastUpdateChkMs = millis();
     }
 
     // Live-Gewicht alle 5 s (ein ueberschreibendes Dokument).
