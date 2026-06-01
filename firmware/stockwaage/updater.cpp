@@ -37,7 +37,9 @@ LatestInfo fetchLatest() {
   JsonArray assets = doc["assets"];
   for (JsonObject a : assets) {
     String name = a["name"].as<String>();
-    if (name.endsWith(".bin")) {
+    // GEZIELT die App-Binary nehmen ("stockwaage-*.bin"), nicht das erste
+    // beliebige .bin (sonst landet bootloader.bin/partitions.bin im OTA).
+    if (name.startsWith("stockwaage") && name.endsWith(".bin")) {
       out.binUrl = a["browser_download_url"].as<String>();
       break;
     }

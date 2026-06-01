@@ -172,6 +172,12 @@ export type Comment = {
   createdAt: number;
 };
 
+// Download-URL der App-Binary eines Releases. Deterministisch aus der Version
+// (CI nennt das Asset immer "stockwaage-<tag>.bin"). Wird im Update-Befehl
+// mitgeschickt, damit der ESP gezielt die App laedt (nicht bootloader.bin).
+export const firmwareBinUrl = (version: string) =>
+  `https://github.com/markus629/Stockwaage/releases/download/${version}/stockwaage-${version}.bin`;
+
 // Vergleicht Semver-Strings (mit fuehrendem 'v' optional). "dev" gilt als
 // aelter -> Updates immer erlaubt. Identisch zur Firmware-Logik.
 export function isNewerVersion(local?: string, remote?: string): boolean {

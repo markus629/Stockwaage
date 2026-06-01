@@ -17,6 +17,7 @@ import {
   DEFAULT_I2C_SDA,
   DEFAULT_RAIN_PIN,
   DEFAULT_WAKE_PIN,
+  firmwareBinUrl,
   INA219_ADDRS,
   isNewerVersion,
   sendCommand,
@@ -422,7 +423,7 @@ function FirmwareSection({
     }
     sendCommand(deviceId, {
       type: "update",
-      payload: { url, version: latest },
+      payload: { url: firmwareBinUrl(latest), version: latest },
     })
       .then(() => {
         window.localStorage.setItem(key, latest);
@@ -458,7 +459,7 @@ function FirmwareSection({
     try {
       await sendCommand(deviceId, {
         type: "update",
-        payload: { url, version: latest },
+        payload: { url: firmwareBinUrl(latest), version: latest },
       });
       if (typeof window !== "undefined" && latest) {
         window.localStorage.setItem(
