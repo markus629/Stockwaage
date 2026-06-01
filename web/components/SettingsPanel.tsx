@@ -403,6 +403,7 @@ function FirmwareSection({
   const url = device?.latestFirmwareUrl;
   const updateAvailable = isNewerVersion(current, latest);
   const autoUpdate = mainCfg.autoUpdateEnabled ?? false;
+  const deepSleep = mainCfg.deepSleepEnabled ?? true;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [autoStatus, setAutoStatus] = useState<string | null>(null);
@@ -426,22 +427,28 @@ function FirmwareSection({
       .then(() => {
         window.localStorage.setItem(key, latest);
         setAutoStatus(
-          `Auto-Update auf ${latest} beauftragt. Der ESP installiert es ` +
-            `beim nächsten Aufwachen – mit dem Wake-Button geht es sofort.`,
+          deepSleep
+            ? `Auto-Update auf ${latest} beauftragt. Der ESP installiert es ` +
+                `beim nächsten Aufwachen – mit dem Wake-Button geht es sofort.`
+            : `Auto-Update auf ${latest} beauftragt. Deep Sleep ist aus – ` +
+                `der ESP installiert es in wenigen Sekunden.`,
         );
       })
       .catch((e) =>
         setError(e instanceof Error ? e.message : String(e)),
       );
-  }, [autoUpdate, updateAvailable, url, latest, deviceId]);
+  }, [autoUpdate, updateAvailable, url, latest, deviceId, deepSleep]);
 
   async function triggerUpdate() {
     if (!url || !latest) return;
     if (
       !confirm(
         `Firmware-Update auf ${latest} beauftragen?\n\n` +
-          `Der ESP lädt die neue Version beim nächsten Aufwachen von ` +
-          `GitHub und startet neu (~1–2 Min) – mit dem Wake-Button sofort. ` +
+          (deepSleep
+            ? `Der ESP lädt die neue Version beim nächsten Aufwachen von ` +
+              `GitHub und startet neu (~1–2 Min) – mit dem Wake-Button sofort. `
+            : `Deep Sleep ist aus: Der ESP lädt die neue Version innerhalb ` +
+              `weniger Sekunden von GitHub und startet neu (~1–2 Min). `) +
           `Stromversorgung in der Zeit nicht unterbrechen.`,
       )
     )
@@ -460,8 +467,11 @@ function FirmwareSection({
         );
       }
       setAutoStatus(
-        `Update auf ${latest} beauftragt. Der ESP installiert es beim ` +
-          `nächsten Aufwachen – mit dem Wake-Button geht es sofort.`,
+        deepSleep
+          ? `Update auf ${latest} beauftragt. Der ESP installiert es beim ` +
+              `nächsten Aufwachen – mit dem Wake-Button geht es sofort.`
+          : `Update auf ${latest} beauftragt. Deep Sleep ist aus – der ESP ` +
+              `installiert es in wenigen Sekunden.`,
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -523,12 +533,23 @@ function FirmwareSection({
         )}
         {error && <p className="text-xs text-red-700">{error}</p>}
         <p className="text-xs text-neutral-500">
-          Der ESP prüft bei jedem Aufwachen auf neue Releases und
-          installiert sie dann sofort (vor der Messung), sofern
-          Auto-Update an ist oder ein Update beauftragt wurde. Da er
-          meist schläft: <strong>Wake-Button drücken oder ESP neu
-          starten → Update läuft sofort → fertig.</strong> Der Auftrag
-          liegt in Firestore, das UI muss nicht offen bleiben.
+          {deepSleep ? (
+            <>
+              Der ESP prüft bei jedem Aufwachen auf neue Releases und
+              installiert sie dann sofort (vor der Messung), sofern
+              Auto-Update an ist oder ein Update beauftragt wurde. Da er
+              meist schläft: <strong>Wake-Button drücken oder ESP neu
+              starten → Update läuft sofort → fertig.</strong> Der Auftrag
+              liegt in Firestore, das UI muss nicht offen bleiben.
+            </>
+          ) : (
+            <>
+              <strong>Deep Sleep ist aus</strong> – der ESP bleibt wach und
+              holt beauftragte Updates innerhalb weniger Sekunden ab und
+              installiert sie (danach Neustart ~1–2 Min). Der Auftrag liegt in
+              Firestore, das UI muss nicht offen bleiben.
+            </>
+          )}
         </p>
       </div>
     </Section>
