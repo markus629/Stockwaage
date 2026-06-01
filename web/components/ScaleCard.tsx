@@ -14,6 +14,7 @@ import {
 import type { ConfigTab, ScaleUiPrefs } from "@/lib/uiPrefs";
 import CommentsSection from "./CommentsSection";
 import DebouncedInput from "./DebouncedInput";
+import LiveWeight from "./LiveWeight";
 import DailyChangeChart from "./DailyChangeChart";
 import LearningPhase from "./LearningPhase";
 import PinSelect from "./PinSelect";
@@ -254,6 +255,10 @@ export default function ScaleCard({
                 </div>
               </div>
             )}
+          </div>
+
+          <div className="rounded border border-neutral-200 bg-white px-3 py-2">
+            <LiveWeight reading={reading} />
           </div>
 
           <ScaleChart

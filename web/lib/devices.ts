@@ -302,8 +302,9 @@ const BATCH_SIZE = 450;
 // Schuetzt das (kostenlose) Tages-Read-Budget vor einer Riesen-Collection.
 // Aeltere Readings raeumt ohnehin die Firestore-TTL weg (expireAt), und ein
 // verwaistes scales.<sid>-Feld in alten Docs ist unsichtbar (die Waage ist
-// aus der Config raus). ~20k deckt >200 Tage bei 15-min-Intervall ab.
-const MAX_READING_CLEANUP = 20000;
+// aus der Config raus). 10000 = Firestore-Maximum fuer limit(); deckt bei
+// 15-min-Intervall ~100 Tage ab (mehr als die TTL).
+const MAX_READING_CLEANUP = 10000;
 
 async function deleteRefsInBatches(refs: DocumentReference[]): Promise<void> {
   for (let i = 0; i < refs.length; i += BATCH_SIZE) {

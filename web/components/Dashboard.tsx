@@ -22,11 +22,13 @@ import {
 } from "@/lib/devices";
 import ScaleChart from "./ScaleChart";
 import { ScaleFeedStatus, ScaleSwarmStatus } from "./HiveStatus";
+import LiveWeight from "./LiveWeight";
 
 const DASHBOARD_DAYS = 3;
 
 type Props = {
   readings: Reading[];
+  latest: Reading | null;
   scales: Record<string, ScaleConfig>;
   scaleIds: string[];
   mainCfg: MainConfig;
@@ -36,6 +38,7 @@ type Props = {
 
 export default function Dashboard({
   readings,
+  latest,
   scales,
   scaleIds,
   mainCfg,
@@ -90,6 +93,7 @@ export default function Dashboard({
         >
           <ScaleChart scaleId={sid} readings={windowReadings} days={DASHBOARD_DAYS} />
           <div className="mt-2 space-y-1 border-t border-neutral-100 pt-2">
+            <LiveWeight reading={latest?.scales?.[sid]} />
             <ScaleSwarmStatus
               readings={windowReadings}
               scaleId={sid}

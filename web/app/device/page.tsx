@@ -298,6 +298,7 @@ function DeviceDetail() {
       {tab === "dashboard" && (
         <Dashboard
           readings={windowReadings}
+          latest={latest}
           scales={scales}
           scaleIds={scaleIds}
           mainCfg={mainCfg}
