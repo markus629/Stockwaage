@@ -19,6 +19,7 @@ import {
   computePinOwners,
   dailyStatsCol,
   deviceDoc,
+  liveDoc,
   mainConfigDoc,
   MAX_SCALES,
   readingsCol,
@@ -86,6 +87,7 @@ function DeviceDetail() {
   const [mainCfg, setMainCfg] = useState<MainConfig>({});
   const [scales, setScales] = useState<Record<string, ScaleConfig>>({});
   const [latest, setLatest] = useState<Reading | null>(null);
+  const [live, setLive] = useState<Reading | null>(null);
   const [windowReadings, setWindowReadings] = useState<Reading[]>([]);
   const [loadedRawDays, setLoadedRawDays] = useState(0);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -134,6 +136,12 @@ function DeviceDetail() {
         (snap) => setLatest((snap.docs[0]?.data() as Reading) ?? null),
       ),
     );
+    // Live-Gewicht (vom ESP nur im Wachbetrieb geschrieben).
+    unsubs.push(
+      onSnapshot(liveDoc(deviceId), (s) =>
+        setLive(s.exists() ? (s.data() as Reading) : null),
+      ),
+    );
     unsubs.push(
       onSnapshot(commentsCol(deviceId), (snap) =>
         setComments(
@@ -148,6 +156,14 @@ function DeviceDetail() {
     () => Object.keys(scales).sort((a, b) => a.localeCompare(b)),
     [scales],
   );
+
+  // Aktueller Messwert fuer die Live-Anzeige: das Live-Dokument (Wachbetrieb,
+  // alle ~5s) bevorzugen, solange es neuer ist als das letzte normale Reading;
+  // sonst Fallback auf das letzte Reading.
+  const current = useMemo<Reading | null>(() => {
+    if (live && (!latest || (live.ts ?? 0) >= (latest.ts ?? 0))) return live;
+    return latest;
+  }, [live, latest]);
 
   // Nach dem Tab-Wechsel zur angeklickten Waage scrollen.
   useEffect(() => {
@@ -298,7 +314,7 @@ function DeviceDetail() {
       {tab === "dashboard" && (
         <Dashboard
           readings={windowReadings}
-          latest={latest}
+          latest={current}
           scales={scales}
           scaleIds={scaleIds}
           mainCfg={mainCfg}
@@ -317,7 +333,7 @@ function DeviceDetail() {
                 deviceId={deviceId}
                 scaleId={sid}
                 cfg={scales[sid] ?? { id: sid }}
-                reading={latest?.scales?.[sid]}
+                reading={current?.scales?.[sid]}
                 readings={windowReadings}
                 prefs={uiPrefs.get(sid)}
                 pinOwners={pinOwners}
@@ -366,7 +382,7 @@ function DeviceDetail() {
         <CalibrationWizard
           deviceId={deviceId}
           scale={scales[wizardFor] ?? { id: wizardFor }}
-          latestRaw={latest?.scales?.[wizardFor]?.raw}
+          latestRaw={current?.scales?.[wizardFor]?.raw}
           onClose={() => setWizardFor(null)}
         />
       )}

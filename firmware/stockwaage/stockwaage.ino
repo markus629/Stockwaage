@@ -299,17 +299,59 @@ void initSensorsFromCfg() {
   sensors::initEnv(cfg.main);
 }
 
-// Wachbetrieb (Deep Sleep deaktiviert): ESP bleibt wach, uebernimmt
-// Einstellungen + Update-Commands sofort und misst weiterhin im eingestellten
-// Intervall. Kehrt zurueck, sobald Deep Sleep wieder aktiviert wird.
+// Leichtgewichtiges Live-Gewicht in EIN ueberschreibendes Dokument
+// (live/current) schreiben. Kein readings/dailyStats/heartbeat -> 1 Write,
+// das Dokument waechst nie. Nur im Wachbetrieb genutzt.
+void writeLive() {
+  double rawScales[NUM_SCALES];
+  sensors::readScalesRaw(rawScales);
+  sensors::EnvReading env;
+  sensors::readEnv(env, cfg.main);
+  const double ambientC = env.tempC;
+  float vBat = sensors::readVBat();
+
+  uint64_t tsMs = (uint64_t)time(nullptr) * 1000ULL;
+  DynamicJsonDocument out(3072);
+  JsonObject fields = out.createNestedObject("fields");
+  fb::writeInteger(fields, "ts",   (long long)tsMs);
+  fb::writeNumber (fields, "vBat", vBat);
+  JsonObject scalesFields = fields.createNestedObject("scales")
+                                  .createNestedObject("mapValue")
+                                  .createNestedObject("fields");
+  for (int i = 0; i < NUM_SCALES; i++) {
+    if (isnan(rawScales[i])) continue;
+    double kg = isnan(ambientC) ? NAN
+                                : cfg.computeKg(i, rawScales[i], ambientC);
+    JsonObject e = scalesFields.createNestedObject(scaleId(i).c_str())
+                               .createNestedObject("mapValue")
+                               .createNestedObject("fields");
+    fb::writeNumber(e, "raw", rawScales[i]);
+    if (!isnan(kg)) fb::writeNumber(e, "kg", kg);
+  }
+
+  String body;
+  serializeJson(out, body);
+  String path = String("users/") + OWNER_UID + "/devices/" + deviceId
+              + "/live/current";
+  fb::patchDoc(idToken, path, body);
+}
+
+// Wachbetrieb (Deep Sleep deaktiviert): ESP bleibt wach, schreibt alle 5 s
+// das aktuelle Gewicht (Live), uebernimmt Einstellungen + Update-Commands
+// schnell und misst weiterhin im eingestellten Intervall. Kehrt zurueck,
+// sobald Deep Sleep wieder aktiviert wird.
 void runAwakeMode() {
-  Serial.println("[awake] Deep Sleep AUS -> bleibe wach");
+  Serial.println("[awake] Deep Sleep AUS -> bleibe wach (Live-Modus)");
   uint32_t lastMeasureMs = millis();
+  uint32_t lastLiveMs    = millis();
+  uint32_t lastPollMs    = millis();
   uint32_t lastLoginMs   = millis();
   const uint32_t LOGIN_REFRESH_MS = 50UL * 60UL * 1000UL;  // Token < 1h gueltig
+  const uint32_t LIVE_MS = 5000;   // Live-Gewicht-Takt
+  const uint32_t POLL_MS = 5000;   // Commands + Config
 
   while (true) {
-    delay(3000);
+    delay(500);
 
     // WLAN ggf. wiederherstellen.
     if (WiFi.status() != WL_CONNECTED) {
@@ -323,18 +365,27 @@ void runAwakeMode() {
       if (lr.ok) { idToken = lr.idToken; lastLoginMs = millis(); }
     }
 
-    // Commands (inkl. Firmware-Update) sofort abarbeiten und Config jedes Mal
-    // neu laden, damit UI-Einstellungen unmittelbar greifen.
-    commands::processPending(idToken, deviceId, cfg);
-    cfg.load(idToken, deviceId);
-
-    // Deep Sleep wieder aktiviert? -> raus, normaler Sleep-Zyklus uebernimmt.
-    if (cfg.main.deepSleepEnabled) {
-      Serial.println("[awake] Deep Sleep wieder AN");
-      return;
+    // Live-Gewicht alle 5 s (ein ueberschreibendes Dokument).
+    if (millis() - lastLiveMs >= LIVE_MS) {
+      writeLive();
+      lastLiveMs = millis();
     }
 
-    // Weiterhin im eingestellten Intervall messen.
+    // Commands (inkl. Firmware-Update) abarbeiten + Config neu laden, damit
+    // UI-Einstellungen schnell greifen.
+    if (millis() - lastPollMs >= POLL_MS) {
+      commands::processPending(idToken, deviceId, cfg);
+      cfg.load(idToken, deviceId);
+      lastPollMs = millis();
+      // Deep Sleep wieder aktiviert? -> raus, normaler Sleep-Zyklus uebernimmt.
+      if (cfg.main.deepSleepEnabled) {
+        Serial.println("[awake] Deep Sleep wieder AN");
+        return;
+      }
+    }
+
+    // Volle Messung (readings + dailyStats + heartbeat) im eingestellten
+    // Intervall.
     uint32_t ivSec = cfg.main.intervalSec < 30 ? 30 : cfg.main.intervalSec;
     if (millis() - lastMeasureMs >= ivSec * 1000UL) {
       initSensorsFromCfg();   // evtl. geaenderte Pins/Sensoren uebernehmen

@@ -228,6 +228,9 @@ export const scalesCol = (id: string) =>
   collection(db, ...devicePath(id), "scales");
 export const readingsCol = (id: string) =>
   collection(db, ...devicePath(id), "readings");
+// Einzelnes, vom ESP im Wachbetrieb alle ~5s ueberschriebenes Live-Dokument.
+export const liveDoc = (id: string) =>
+  doc(db, ...devicePath(id), "live", "current");
 export const commandsCol = (id: string) =>
   collection(db, ...devicePath(id), "commands");
 export const dailyStatsCol = (id: string) =>
