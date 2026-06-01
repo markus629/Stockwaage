@@ -78,7 +78,11 @@ bool isNewer(const String& local, const String& remote) {
 bool applyUpdate(const String& binUrl) {
   Serial.printf("[update] downloading %s\n", binUrl.c_str());
   WiFiClientSecure client;
-  client.setInsecure();
+  client.setInsecure();  // GitHub: kein CA-Bundle, Vertrauen via DNS+TLS
+  // GitHub-Asset-URLs (releases/download/...) antworten mit 302 auf
+  // objects.githubusercontent.com. Ohne Redirect-Folgen schlaegt der
+  // Download fehl -> zwingend folgen.
+  httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
   httpUpdate.rebootOnUpdate(true);
   t_httpUpdate_return ret = httpUpdate.update(client, binUrl);
   switch (ret) {
