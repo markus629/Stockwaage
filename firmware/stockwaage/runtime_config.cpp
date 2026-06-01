@@ -134,6 +134,13 @@ bool RuntimeConfig::saveMain(const String& idToken,
 double RuntimeConfig::computeKg(int idx, double raw, double tempC) const {
   const auto& s = scales[idx];
   if (s.scaleFactor == 0.0) return NAN;
-  double corrected = raw - s.offset - s.tempCoef * (tempC - s.tempRefC);
-  return corrected / s.scaleFactor;
+  // Temperaturkompensation nur, wenn ein Koeffizient gesetzt UND eine
+  // Temperatur verfuegbar ist. Ohne Temp-Sensor (tempC=NaN) oder ohne
+  // Koeffizient wird unkompensiert gerechnet, statt kg=NaN zu liefern
+  // (sonst zeigt eine kalibrierte Waage ohne BME280 nie kg an).
+  double tempComp = 0.0;
+  if (s.tempCoef != 0.0 && !isnan(tempC)) {
+    tempComp = s.tempCoef * (tempC - s.tempRefC);
+  }
+  return (raw - s.offset - tempComp) / s.scaleFactor;
 }

@@ -234,8 +234,8 @@ bool measureAndUpload() {
   for (int i = 0; i < NUM_SCALES; i++) {
     kgScales[i] = NAN;
     if (isnan(rawScales[i])) continue;
-    double kg = isnan(ambientC) ? NAN
-                                : cfg.computeKg(i, rawScales[i], ambientC);
+    // computeKg rechnet ohne Temp unkompensiert (statt NaN).
+    double kg = cfg.computeKg(i, rawScales[i], ambientC);
     kgScales[i] = kg;
     JsonObject scaleEntry = scalesFields.createNestedObject(scaleId(i).c_str())
                                         .createNestedObject("mapValue")
@@ -320,8 +320,8 @@ void writeLive() {
                                   .createNestedObject("fields");
   for (int i = 0; i < NUM_SCALES; i++) {
     if (isnan(rawScales[i])) continue;
-    double kg = isnan(ambientC) ? NAN
-                                : cfg.computeKg(i, rawScales[i], ambientC);
+    // computeKg rechnet ohne Temp unkompensiert (statt NaN).
+    double kg = cfg.computeKg(i, rawScales[i], ambientC);
     JsonObject e = scalesFields.createNestedObject(scaleId(i).c_str())
                                .createNestedObject("mapValue")
                                .createNestedObject("fields");
