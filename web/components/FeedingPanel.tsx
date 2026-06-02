@@ -79,48 +79,15 @@ export default function FeedingPanel({
     }
   }
 
+  const days = fc?.daysLeft != null ? Math.round(fc.daysLeft) : null;
+
   return (
     <div className="mt-3">
       <p className="mb-1 text-[10px] uppercase tracking-wide text-neutral-500">
         Fütterung
       </p>
 
-      <div className="mb-2 text-xs text-neutral-600">
-        {tracking && remaining !== null ? (
-          <>
-            Erfasstes Futter: <span className="font-mono">{remaining.toFixed(1)} kg</span>
-            {fc?.daysLeft != null && (
-              <>
-                {" "}
-                · reicht noch{" "}
-                <span
-                  className={
-                    Math.round(fc.daysLeft) < 14
-                      ? "font-medium text-red-600"
-                      : "font-medium"
-                  }
-                >
-                  ~{Math.round(fc.daysLeft)}{" "}
-                  {Math.round(fc.daysLeft) === 1 ? "Tag" : "Tage"}
-                </span>
-              </>
-            )}
-            {fc?.daysLeft == null && fc?.dailyChangeKg == null && (
-              <> · Verbrauch wird noch ermittelt</>
-            )}
-            {fc?.daysLeft == null && fc?.dailyChangeKg != null && (
-              <> · derzeit kein Verbrauch</>
-            )}
-          </>
-        ) : (
-          <>
-            Noch kein Futter erfasst. Gefütterte Menge eintragen, dann zählt die
-            Waage den Verbrauch herunter.
-          </>
-        )}
-      </div>
-
-      <div className="flex gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <input
           type="number"
           step="0.1"
@@ -131,7 +98,7 @@ export default function FeedingPanel({
           onKeyDown={(e) => {
             if (e.key === "Enter") submit();
           }}
-          className="w-24 rounded border border-neutral-300 px-2 py-1 text-sm"
+          className="w-20 rounded border border-neutral-300 px-2 py-1 text-sm"
         />
         <button
           type="button"
@@ -141,6 +108,25 @@ export default function FeedingPanel({
         >
           kg gefüttert
         </button>
+
+        {tracking && remaining !== null && (
+          <span className="text-sm">
+            <span className="font-mono font-semibold tabular-nums">
+              {remaining.toFixed(1)} kg
+            </span>
+            {days != null && (
+              <span
+                className={
+                  days < 14 ? "font-medium text-red-600" : "text-neutral-500"
+                }
+              >
+                {" "}
+                · ~{days} {days === 1 ? "Tag" : "Tage"}
+              </span>
+            )}
+          </span>
+        )}
+
         {tracking && (
           <button
             type="button"
@@ -152,6 +138,16 @@ export default function FeedingPanel({
           </button>
         )}
       </div>
+
+      <p className="mt-1 text-xs text-neutral-500">
+        {!tracking
+          ? "Noch kein Futter erfasst. Gefütterte Menge eintragen, dann zählt die Waage den Verbrauch herunter."
+          : days != null
+            ? "Restmenge & Reichweite bei aktuellem Verbrauch."
+            : fc?.dailyChangeKg == null
+              ? "Verbrauch wird noch ermittelt (ein paar Tage Messdaten nötig)."
+              : "Derzeit kein Verbrauch (Gewicht steigt/konstant)."}
+      </p>
 
       {error && <p className="mt-1 text-xs text-red-700">{error}</p>}
     </div>
