@@ -111,6 +111,14 @@ export type ScaleConfig = {
   tempRefC?: number;
   dtPin?: number;
   onDashboard?: boolean;
+  // Futter-Erfassung: gefuetterte Menge wird mitgezaehlt und ueber den per
+  // Waage gemessenen Verbrauch heruntergerechnet (siehe lib/analysis.ts).
+  // feedReserveKg = erfasstes Futter zum Baseline-Zeitpunkt,
+  // feedBaselineKg = Waagengewicht (kg) zu dem Zeitpunkt,
+  // feedUpdatedAt  = wann zuletzt gefuettert/erfasst (ms).
+  feedReserveKg?: number;
+  feedBaselineKg?: number;
+  feedUpdatedAt?: number;
   learning?: { startedAt: number };
 };
 
@@ -281,6 +289,35 @@ export async function clearScaleLearning(
   scaleId: string,
 ): Promise<void> {
   await updateDoc(scaleDoc(deviceId, scaleId), { learning: deleteField() });
+}
+
+// Erfasst eine Fuetterung: addiert `amountKg` aufs verbleibende Futter und
+// setzt die Baseline aufs aktuelle Waagengewicht. `remainingBeforeKg` ist das
+// vor der Fuetterung noch erfasste Futter (0 wenn nichts erfasst war).
+export async function logFeeding(
+  deviceId: string,
+  scaleId: string,
+  amountKg: number,
+  currentKg: number,
+  remainingBeforeKg: number,
+): Promise<void> {
+  const round2 = (v: number) => Math.round(v * 100) / 100;
+  await updateScaleConfig(deviceId, scaleId, {
+    feedReserveKg: round2(Math.max(0, remainingBeforeKg) + amountKg),
+    feedBaselineKg: round2(currentKg),
+    feedUpdatedAt: Date.now(),
+  });
+}
+
+export async function clearFeedTracking(
+  deviceId: string,
+  scaleId: string,
+): Promise<void> {
+  await updateDoc(scaleDoc(deviceId, scaleId), {
+    feedReserveKg: deleteField(),
+    feedBaselineKg: deleteField(),
+    feedUpdatedAt: deleteField(),
+  });
 }
 
 export async function updateMainConfig(

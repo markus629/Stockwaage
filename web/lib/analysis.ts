@@ -61,24 +61,41 @@ export function detectSwarm(
   return { swarm: worst >= dropKg, dropKg: worst, atTs, samples: pts.length };
 }
 
-// ----- Winterfutter-Prognose ------------------------------------------------
+// ----- Futter-Reichweite ----------------------------------------------------
+//
+// Modell: Der Imker erfasst, wieviel Futter er gibt (feedReserveKg ab einem
+// Baseline-Gewicht). Den Verbrauch misst die Waage – als mittlere taegliche
+// Gewichtsaenderung SEIT der letzten Fuetterung (saubere Steigung ohne den
+// Futter-Sprung). Daraus: verbleibendes Futter / Verbrauch = Reichweite.
 
-// Mittlere Tagesaenderung aus den letzten 3 Wochen (dailyStats) hochrechnen.
+// Fallback-Fenster (Tage), wenn keine Fuetterung erfasst ist.
 export const FORECAST_LOOKBACK_DAYS = 21;
 
-export type FeedForecast = {
-  currentKg: number; // letztes bekanntes Tagesschlussgewicht
-  dailyChangeKg: number; // mittlere Aenderung pro Tag (negativ = Verbrauch)
-  daysLeft: number | null; // Tage bis 0 kg; null wenn kein Verbrauch (Zunahme)
-  basisDays: number; // Anzahl Tage in der Berechnung
+export type FeedInput = {
+  reserveKg?: number; // feedReserveKg aus der ScaleConfig
+  baselineKg?: number; // feedBaselineKg
+  sinceTs?: number; // feedUpdatedAt (ms) – ab hier Verbrauch messen
+  currentKg?: number; // aktuelles Waagengewicht (kg)
 };
 
-// Schaetzt per linearer Regression ueber die letzten FORECAST_LOOKBACK_DAYS
-// die taegliche Gewichtsaenderung und rechnet hoch, wie lange das Futter
-// (das aktuelle Gewicht) bei diesem Verbrauch noch reicht.
+export type FeedForecast = {
+  dailyChangeKg: number | null; // Verbrauch/Tag (negativ = zehrt); null = zu wenig Daten
+  remainingKg: number | null; // verbleibendes erfasstes Futter; null = nichts erfasst
+  daysLeft: number | null; // Tage bis Futter aufgebraucht; null wenn nicht bestimmbar
+  basisDays: number; // Tage in der Verbrauchs-Berechnung
+};
+
+function localDay(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate(),
+  ).padStart(2, "0")}`;
+}
+
 export function forecastFeed(
   dailyStats: DailyStat[],
   scaleId: string,
+  feed?: FeedInput,
 ): FeedForecast | null {
   const series = dailyStats
     .map((d) => ({ date: d.date, last: d.scales?.[scaleId]?.last }))
@@ -87,22 +104,38 @@ export function forecastFeed(
     )
     .sort((a, b) => (a.date < b.date ? -1 : 1));
 
-  if (series.length < 2) return null;
-  const window = series.slice(-FORECAST_LOOKBACK_DAYS);
-  if (window.length < 2) return null;
+  // Verbleibendes erfasstes Futter aus Baseline + aktueller Gewichtsdifferenz.
+  let remainingKg: number | null = null;
+  if (
+    feed &&
+    typeof feed.reserveKg === "number" &&
+    typeof feed.baselineKg === "number" &&
+    typeof feed.currentKg === "number"
+  ) {
+    remainingKg = Math.max(0, feed.reserveKg + (feed.currentKg - feed.baselineKg));
+  }
 
-  const t0 = Date.parse(window[0].date);
-  const reg = linearRegression(
-    window.map((d) => ({
-      x: (Date.parse(d.date) - t0) / 86_400_000, // Tage seit Fensterbeginn
-      y: d.last,
-    })),
-  );
-  if (!reg) return null;
+  // Verbrauchsfenster: seit der letzten Fuetterung (sauber), sonst 21 Tage.
+  const used =
+    feed?.sinceTs != null
+      ? series.filter((d) => d.date >= localDay(feed.sinceTs!))
+      : series.slice(-FORECAST_LOOKBACK_DAYS);
 
-  const dailyChangeKg = reg.slope; // kg pro Tag
-  const currentKg = window[window.length - 1].last;
-  const daysLeft = dailyChangeKg < 0 ? currentKg / -dailyChangeKg : null;
+  let dailyChangeKg: number | null = null;
+  if (used.length >= 2) {
+    const t0 = Date.parse(used[0].date);
+    const reg = linearRegression(
+      used.map((d) => ({ x: (Date.parse(d.date) - t0) / 86_400_000, y: d.last })),
+    );
+    if (reg) dailyChangeKg = reg.slope;
+  }
 
-  return { currentKg, dailyChangeKg, daysLeft, basisDays: window.length };
+  if (remainingKg === null && dailyChangeKg === null) return null;
+
+  const daysLeft =
+    remainingKg !== null && dailyChangeKg !== null && dailyChangeKg < 0
+      ? remainingKg / -dailyChangeKg
+      : null;
+
+  return { dailyChangeKg, remainingKg, daysLeft, basisDays: used.length };
 }

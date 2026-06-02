@@ -14,6 +14,7 @@ import {
 import type { ConfigTab, ScaleUiPrefs } from "@/lib/uiPrefs";
 import CommentsSection from "./CommentsSection";
 import DebouncedInput from "./DebouncedInput";
+import FeedingPanel from "./FeedingPanel";
 import LiveWeight from "./LiveWeight";
 import DailyChangeChart from "./DailyChangeChart";
 import LearningPhase from "./LearningPhase";
@@ -272,6 +273,13 @@ export default function ScaleCard({
             scaleId={scaleId}
             stats={dailyStats}
             comments={comments}
+          />
+          <FeedingPanel
+            deviceId={deviceId}
+            scaleId={scaleId}
+            cfg={cfg}
+            currentKg={reading?.kg}
+            dailyStats={dailyStats}
           />
           <CommentsSection
             deviceId={deviceId}

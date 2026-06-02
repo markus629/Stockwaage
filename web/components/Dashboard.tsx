@@ -95,7 +95,14 @@ export default function Dashboard({
               dropKg={mainCfg.swarmDropKg ?? DEFAULT_SWARM_DROP_KG}
               windowMin={mainCfg.swarmWindowMin ?? DEFAULT_SWARM_WINDOW_MIN}
             />
-            <ScaleFeedStatus dailyStats={dailyStats} scaleId={sid} />
+            <ScaleFeedStatus
+              dailyStats={dailyStats}
+              scaleId={sid}
+              reserveKg={scales[sid]?.feedReserveKg}
+              baselineKg={scales[sid]?.feedBaselineKg}
+              sinceTs={scales[sid]?.feedUpdatedAt}
+              currentKg={latest?.scales?.[sid]?.kg}
+            />
           </div>
         </Tile>
       ))}

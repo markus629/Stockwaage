@@ -74,29 +74,46 @@ export function ScaleSwarmStatus({
 export function ScaleFeedStatus({
   dailyStats,
   scaleId,
+  reserveKg,
+  baselineKg,
+  sinceTs,
+  currentKg,
 }: {
   dailyStats: DailyStat[];
   scaleId: string;
+  reserveKg?: number;
+  baselineKg?: number;
+  sinceTs?: number;
+  currentKg?: number;
 }) {
-  const fc = forecastFeed(dailyStats, scaleId);
+  const fc = forecastFeed(dailyStats, scaleId, {
+    reserveKg,
+    baselineKg,
+    sinceTs,
+    currentKg,
+  });
   let value: React.ReactNode;
-  if (!fc) {
-    value = <span className="text-neutral-400">zu wenig Tage</span>;
-  } else if (fc.daysLeft === null) {
-    value = (
-      <span className="text-green-600">
-        +{(fc.dailyChangeKg * 1000).toFixed(0)} g/Tag · nimmt zu
-      </span>
-    );
+  if (!fc || fc.remainingKg === null) {
+    value = <span className="text-neutral-400">nicht erfasst</span>;
   } else {
-    const days = Math.round(fc.daysLeft);
-    const urgent = days < 14;
-    value = (
-      <span className={urgent ? "font-medium text-red-600" : "text-neutral-600"}>
-        {(fc.dailyChangeKg * 1000).toFixed(0)} g/Tag · reicht ~{days}{" "}
-        {days === 1 ? "Tag" : "Tage"}
-      </span>
-    );
+    const rem = fc.remainingKg.toFixed(1);
+    if (fc.daysLeft !== null) {
+      const days = Math.round(fc.daysLeft);
+      const urgent = days < 14;
+      value = (
+        <span className={urgent ? "font-medium text-red-600" : "text-neutral-600"}>
+          noch {rem} kg · reicht ~{days} {days === 1 ? "Tag" : "Tage"}
+        </span>
+      );
+    } else if (fc.dailyChangeKg === null) {
+      value = (
+        <span className="text-neutral-600">noch {rem} kg · Verbrauch wird ermittelt</span>
+      );
+    } else {
+      value = (
+        <span className="text-green-600">noch {rem} kg · derzeit kein Verbrauch</span>
+      );
+    }
   }
   return (
     <div className="flex items-center gap-2 text-xs">
