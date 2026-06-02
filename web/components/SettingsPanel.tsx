@@ -415,7 +415,7 @@ function FirmwareSection({
   useEffect(() => {
     if (!autoUpdate || !updateAvailable || !url || !latest) return;
     if (typeof window === "undefined") return;
-    const key = `stockwaage.autoupdate.${deviceId}`;
+    const key = `stockwaage.autoupdate.v2.${deviceId}`;
     const already = window.localStorage.getItem(key);
     if (already === latest) {
       setAutoStatus(`Auto-Update für ${latest} wurde bereits beauftragt.`);
@@ -463,7 +463,7 @@ function FirmwareSection({
       });
       if (typeof window !== "undefined" && latest) {
         window.localStorage.setItem(
-          `stockwaage.autoupdate.${deviceId}`,
+          `stockwaage.autoupdate.v2.${deviceId}`,
           latest,
         );
       }
