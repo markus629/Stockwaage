@@ -33,6 +33,7 @@ type Props = {
   pinOwners: Record<number, string>;
   comments: Comment[];
   dailyStats: DailyStat[];
+  feedStepThresholdKg?: number;
   onPrefsChange: (patch: Partial<ScaleUiPrefs>) => void;
   onCalibrate: () => void;
   onDelete: () => void | Promise<void>;
@@ -81,6 +82,7 @@ export default function ScaleCard({
   pinOwners,
   comments,
   dailyStats,
+  feedStepThresholdKg,
   onPrefsChange,
   onCalibrate,
   onDelete,
@@ -282,6 +284,7 @@ export default function ScaleCard({
             cfg={cfg}
             currentKg={reading?.kg}
             dailyStats={dailyStats}
+            stepThresholdKg={feedStepThresholdKg}
           />
           <CommentsSection
             deviceId={deviceId}

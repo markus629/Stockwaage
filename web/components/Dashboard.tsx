@@ -107,7 +107,7 @@ export default function Dashboard({
               baselineKg={scales[sid]?.feedBaselineKg}
               baselineAt={scales[sid]?.feedBaselineAt}
               currentKg={latest?.scales?.[sid]?.kg}
-              stepThresholdKg={scales[sid]?.feedStepThresholdKg}
+              stepThresholdKg={mainCfg.feedStepThresholdKg}
             />
           </div>
         </Tile>

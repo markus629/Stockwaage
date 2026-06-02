@@ -29,6 +29,7 @@ import {
 import DebouncedInput from "./DebouncedInput";
 import PinSelect from "./PinSelect";
 import StarToggle from "./StarToggle";
+import { FEED_STEP_THRESHOLD_KG } from "@/lib/analysis";
 
 type Props = {
   deviceId: string;
@@ -158,6 +159,32 @@ export default function SettingsPanel({
             />
             <Hint>
               Standard 30 min. Der Sturz muss innerhalb dieser Zeit passieren.
+            </Hint>
+          </Field>
+        </div>
+      </Section>
+
+      <Section
+        title="Futter-Tracker"
+        subtitle="Für die Futter-Reichweite: wie groß darf eine Tagesänderung sein, damit sie noch als Verbrauch zählt? Größere Sprünge (Füttern, Fütterer abnehmen, Durchsicht) werden ignoriert."
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Sprung-Schwelle (kg/Tag)">
+            <DebouncedInput
+              type="number"
+              min={0.1}
+              step={0.1}
+              value={mainCfg.feedStepThresholdKg ?? FEED_STEP_THRESHOLD_KG}
+              onCommit={(raw) => {
+                const v = parseFloat(raw.replace(",", "."));
+                if (!isNaN(v) && v > 0)
+                  updateMainConfig(deviceId, { feedStepThresholdKg: v });
+              }}
+              className="mt-1 w-full rounded border border-neutral-300 px-2 py-1"
+            />
+            <Hint>
+              Standard 1,0 kg/Tag. Tagesänderungen darüber zählen nicht zum
+              Verbrauch.
             </Hint>
           </Field>
         </div>

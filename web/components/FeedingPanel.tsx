@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FEED_STEP_THRESHOLD_KG, forecastFeed } from "@/lib/analysis";
+import { forecastFeed } from "@/lib/analysis";
 import {
   addComment,
   setFeedBaseline,
@@ -9,7 +9,6 @@ import {
   type DailyStat,
   type ScaleConfig,
 } from "@/lib/devices";
-import DebouncedInput from "./DebouncedInput";
 
 type Props = {
   deviceId: string;
@@ -17,6 +16,7 @@ type Props = {
   cfg: ScaleConfig;
   currentKg?: number; // aktuelles Waagengewicht (kg)
   dailyStats: DailyStat[];
+  stepThresholdKg?: number; // globale Sprung-Schwelle (aus den Einstellungen)
 };
 
 // Futter-Tracker: "Baseline" merkt sich das aktuelle Gewicht als 0-Futter.
@@ -27,6 +27,7 @@ export default function FeedingPanel({
   cfg,
   currentKg,
   dailyStats,
+  stepThresholdKg,
 }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +38,7 @@ export default function FeedingPanel({
     baselineKg: cfg.feedBaselineKg,
     baselineAt: cfg.feedBaselineAt,
     currentKg,
-    stepThresholdKg: cfg.feedStepThresholdKg,
+    stepThresholdKg,
   });
   const remaining = fc?.remainingKg ?? null;
   const days = fc?.daysLeft != null ? Math.round(fc.daysLeft) : null;
@@ -140,25 +141,6 @@ export default function FeedingPanel({
               ? "Verbrauch wird noch ermittelt (ein paar Tage Messdaten nötig)."
               : "Derzeit kein Verbrauch (Gewicht steigt/konstant)."}
       </p>
-
-      {tracking && (
-        <label className="mt-1 flex items-center gap-1.5 text-xs text-neutral-500">
-          Sprünge ignorieren ab
-          <DebouncedInput
-            type="number"
-            step="0.1"
-            min="0.1"
-            value={cfg.feedStepThresholdKg ?? FEED_STEP_THRESHOLD_KG}
-            onCommit={(raw) => {
-              const v = parseFloat(raw.replace(",", "."));
-              if (isFinite(v) && v > 0)
-                updateScaleConfig(deviceId, scaleId, { feedStepThresholdKg: v });
-            }}
-            className="w-14 rounded border border-neutral-300 px-1 py-0.5 text-center"
-          />
-          kg/Tag
-        </label>
-      )}
 
       {error && <p className="mt-1 text-xs text-red-700">{error}</p>}
 

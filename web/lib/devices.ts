@@ -71,6 +71,9 @@ export type MainConfig = {
   // sie): Gewichtssturz >= swarmDropKg innerhalb swarmWindowMin Minuten.
   swarmDropKg?: number;
   swarmWindowMin?: number;
+  // Futter-Tracker: Tagesaenderungen groesser als das gelten als Eingriff
+  // (Fuettern/Durchsicht) und zaehlen nicht zum Verbrauch.
+  feedStepThresholdKg?: number;
 };
 
 // Standardwerte fuer den Schwarm-Alarm (siehe lib/analysis.ts).
@@ -117,7 +120,6 @@ export type ScaleConfig = {
   feedBaselineKg?: number;
   feedBaselineAt?: number; // ms
   feedBaselineVisible?: boolean; // Linie im Gewichts-Graph zeigen
-  feedStepThresholdKg?: number; // Spruenge groesser als das ignoriert der Verbrauch
   learning?: { startedAt: number };
 };
 

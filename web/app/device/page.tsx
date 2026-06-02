@@ -339,6 +339,7 @@ function DeviceDetail() {
                 pinOwners={pinOwners}
                 comments={comments.filter((c) => c.scaleId === sid)}
                 dailyStats={dailyStats}
+                feedStepThresholdKg={mainCfg.feedStepThresholdKg}
                 onPrefsChange={(patch) => uiPrefs.set(sid, patch)}
                 onCalibrate={() => setWizardFor(sid)}
                 onDelete={() => removeScale(deviceId, sid)}
