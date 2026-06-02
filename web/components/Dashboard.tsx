@@ -257,16 +257,18 @@ function DualLineChart({
 
   if (data.length === 0) {
     return (
-      <div className="flex h-32 items-center justify-center text-xs text-neutral-400">
+      <div className="flex h-56 items-center justify-center text-xs text-neutral-400">
         Keine Daten
       </div>
     );
   }
 
   const hasRight = series.some((s) => s.axis === "right");
+  const current = data[data.length - 1];
 
   return (
-    <div className="h-32 w-full">
+    <>
+    <div className="h-56 w-full">
       <ResponsiveContainer>
         <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
@@ -322,18 +324,25 @@ function DualLineChart({
           ))}
         </LineChart>
       </ResponsiveContainer>
-      <div className="mt-1 flex flex-wrap gap-x-3 text-[10px] text-neutral-500">
-        {series.map((s) => (
-          <span key={String(s.key)} className="flex items-center gap-1">
+    </div>
+    <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 border-t border-neutral-100 pt-2">
+      {series.map((s) => {
+        const v = current?.[s.key as string];
+        return (
+          <span key={String(s.key)} className="flex items-baseline gap-1.5">
             <span
-              className="inline-block h-0.5 w-3"
+              className="inline-block h-2 w-2 shrink-0 self-center rounded-full"
               style={{ background: s.color }}
             />
-            {String(s.key)} ({s.label})
+            <span className="font-mono text-base font-semibold tabular-nums">
+              {typeof v === "number" ? v.toFixed(1) : "—"}
+            </span>
+            <span className="text-xs text-neutral-500">{s.label}</span>
           </span>
-        ))}
-      </div>
+        );
+      })}
     </div>
+    </>
   );
 }
 
@@ -348,13 +357,15 @@ function RainBars({ readings }: { readings: Reading[] }) {
   );
   if (data.length === 0) {
     return (
-      <div className="flex h-32 items-center justify-center text-xs text-neutral-400">
+      <div className="flex h-56 items-center justify-center text-xs text-neutral-400">
         Keine Daten
       </div>
     );
   }
+  const current = data[data.length - 1];
   return (
-    <div className="h-32 w-full">
+    <>
+    <div className="h-56 w-full">
       <ResponsiveContainer>
         <BarChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
@@ -390,6 +401,17 @@ function RainBars({ readings }: { readings: Reading[] }) {
         </BarChart>
       </ResponsiveContainer>
     </div>
+    <div className="mt-2 flex items-baseline gap-1.5 border-t border-neutral-100 pt-2">
+      <span
+        className="inline-block h-2 w-2 shrink-0 self-center rounded-full"
+        style={{ background: "#1d4ed8" }}
+      />
+      <span className="font-mono text-base font-semibold tabular-nums">
+        {current?.rainRaw ?? "—"}
+      </span>
+      <span className="text-xs text-neutral-500">Rohwert (aktuell)</span>
+    </div>
+    </>
   );
 }
 
