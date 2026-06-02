@@ -283,6 +283,7 @@ function DualLineChart({
             yAxisId="left"
             tick={{ fontSize: 10 }}
             width={36}
+            domain={["auto", "auto"]}
             tickFormatter={(v) => `${(v as number).toFixed(1)}`}
           />
           {hasRight && (
@@ -291,6 +292,7 @@ function DualLineChart({
               orientation="right"
               tick={{ fontSize: 10 }}
               width={36}
+              domain={["auto", "auto"]}
               tickFormatter={(v) => `${(v as number).toFixed(0)}`}
             />
           )}
@@ -351,7 +353,12 @@ function RainBars({ readings }: { readings: Reading[] }) {
     () =>
       readings
         .filter((r) => r.rainRaw !== undefined)
-        .map((r) => ({ ts: r.ts, rainRaw: r.rainRaw as number }))
+        // Invertiert: hoher Rohwert = trocken. "Nässe" = 4095 − roh, damit
+        // mehr Regen = hoeherer Balken (intuitiver).
+        .map((r) => ({
+          ts: r.ts,
+          wet: Math.max(0, Math.min(4095, 4095 - (r.rainRaw as number))),
+        }))
         .sort((a, b) => a.ts - b.ts),
     [readings],
   );
@@ -390,11 +397,11 @@ function RainBars({ readings }: { readings: Reading[] }) {
                 minute: "2-digit",
               })
             }
-            formatter={(value) => [`${value}`, "Rohwert"]}
+            formatter={(value) => [`${value}`, "Nässe"]}
             contentStyle={{ fontSize: 12 }}
           />
           <Bar
-            dataKey="rainRaw"
+            dataKey="wet"
             fill="#1d4ed8"
             isAnimationActive={false}
           />
@@ -407,9 +414,9 @@ function RainBars({ readings }: { readings: Reading[] }) {
         style={{ background: "#1d4ed8" }}
       />
       <span className="font-mono text-base font-semibold tabular-nums">
-        {current?.rainRaw ?? "—"}
+        {current?.wet ?? "—"}
       </span>
-      <span className="text-xs text-neutral-500">Rohwert (aktuell)</span>
+      <span className="text-xs text-neutral-500">Nässe (0 = trocken)</span>
     </div>
     </>
   );
