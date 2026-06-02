@@ -267,6 +267,8 @@ export default function ScaleCard({
             readings={readings}
             days={prefs.stackDays}
             onDaysChange={(n) => onPrefsChange({ stackDays: n })}
+            baselineKg={cfg.feedBaselineKg}
+            showBaseline={cfg.feedBaselineVisible}
           />
           <DailyChangeChart scaleId={scaleId} stats={dailyStats} />
           <ScaleLongTermChart

@@ -68,21 +68,24 @@ export function detectSwarm(
 // Gewichtsaenderung SEIT der letzten Fuetterung (saubere Steigung ohne den
 // Futter-Sprung). Daraus: verbleibendes Futter / Verbrauch = Reichweite.
 
-// Fallback-Fenster (Tage), wenn keine Fuetterung erfasst ist.
+// Fallback-Fenster (Tage), wenn keine Baseline gesetzt ist.
 export const FORECAST_LOOKBACK_DAYS = 21;
+// Tagesaenderungen groesser als das gelten als Eingriff (Fuettern, Fuetterer
+// abnehmen, Durchsicht) und zaehlen NICHT zum Verbrauch.
+export const FEED_STEP_THRESHOLD_KG = 1.0;
 
 export type FeedInput = {
-  reserveKg?: number; // feedReserveKg aus der ScaleConfig
-  baselineKg?: number; // feedBaselineKg
-  sinceTs?: number; // feedUpdatedAt (ms) – ab hier Verbrauch messen
+  baselineKg?: number; // feedBaselineKg = 0-Futter-Referenz
+  baselineAt?: number; // ms – ab hier Verbrauch messen
   currentKg?: number; // aktuelles Waagengewicht (kg)
+  stepThresholdKg?: number; // Sprung-Schwelle (Default FEED_STEP_THRESHOLD_KG)
 };
 
 export type FeedForecast = {
   dailyChangeKg: number | null; // Verbrauch/Tag (negativ = zehrt); null = zu wenig Daten
-  remainingKg: number | null; // verbleibendes erfasstes Futter; null = nichts erfasst
+  remainingKg: number | null; // verbleibendes Futter = aktuell − Baseline; null = keine Baseline
   daysLeft: number | null; // Tage bis Futter aufgebraucht; null wenn nicht bestimmbar
-  basisDays: number; // Tage in der Verbrauchs-Berechnung
+  basisDays: number; // Anzahl gewerteter Tagesaenderungen
 };
 
 function localDay(ts: number): string {
@@ -104,31 +107,34 @@ export function forecastFeed(
     )
     .sort((a, b) => (a.date < b.date ? -1 : 1));
 
-  // Verbleibendes erfasstes Futter aus Baseline + aktueller Gewichtsdifferenz.
+  // Verbleibendes Futter = aktuelles Gewicht − Baseline.
   let remainingKg: number | null = null;
   if (
     feed &&
-    typeof feed.reserveKg === "number" &&
     typeof feed.baselineKg === "number" &&
     typeof feed.currentKg === "number"
   ) {
-    remainingKg = Math.max(0, feed.reserveKg + (feed.currentKg - feed.baselineKg));
+    remainingKg = Math.max(0, feed.currentKg - feed.baselineKg);
   }
 
-  // Verbrauchsfenster: seit der letzten Fuetterung (sauber), sonst 21 Tage.
+  // Verbrauchsfenster: ab Baseline (sonst 21 Tage).
   const used =
-    feed?.sinceTs != null
-      ? series.filter((d) => d.date >= localDay(feed.sinceTs!))
+    feed?.baselineAt != null
+      ? series.filter((d) => d.date >= localDay(feed.baselineAt!))
       : series.slice(-FORECAST_LOOKBACK_DAYS);
 
-  let dailyChangeKg: number | null = null;
-  if (used.length >= 2) {
-    const t0 = Date.parse(used[0].date);
-    const reg = linearRegression(
-      used.map((d) => ({ x: (Date.parse(d.date) - t0) / 86_400_000, y: d.last })),
-    );
-    if (reg) dailyChangeKg = reg.slope;
+  // Tag-zu-Tag-Aenderungen: grosse Spruenge (Eingriffe) ignorieren, die
+  // kleinen mitteln -> robuster Zehr-Trend (Rauschen hebt sich auf).
+  const threshold = feed?.stepThresholdKg ?? FEED_STEP_THRESHOLD_KG;
+  let sum = 0;
+  let n = 0;
+  for (let i = 1; i < used.length; i++) {
+    const delta = used[i].last - used[i - 1].last;
+    if (Math.abs(delta) > threshold) continue; // Eingriff -> raus
+    sum += delta;
+    n++;
   }
+  const dailyChangeKg = n > 0 ? sum / n : null;
 
   if (remainingKg === null && dailyChangeKg === null) return null;
 
@@ -137,5 +143,5 @@ export function forecastFeed(
       ? remainingKg / -dailyChangeKg
       : null;
 
-  return { dailyChangeKg, remainingKg, daysLeft, basisDays: used.length };
+  return { dailyChangeKg, remainingKg, daysLeft, basisDays: n };
 }

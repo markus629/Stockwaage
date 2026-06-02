@@ -74,27 +74,27 @@ export function ScaleSwarmStatus({
 export function ScaleFeedStatus({
   dailyStats,
   scaleId,
-  reserveKg,
   baselineKg,
-  sinceTs,
+  baselineAt,
   currentKg,
+  stepThresholdKg,
 }: {
   dailyStats: DailyStat[];
   scaleId: string;
-  reserveKg?: number;
   baselineKg?: number;
-  sinceTs?: number;
+  baselineAt?: number;
   currentKg?: number;
+  stepThresholdKg?: number;
 }) {
   const fc = forecastFeed(dailyStats, scaleId, {
-    reserveKg,
     baselineKg,
-    sinceTs,
+    baselineAt,
     currentKg,
+    stepThresholdKg,
   });
   let value: React.ReactNode;
   if (!fc || fc.remainingKg === null) {
-    value = <span className="text-neutral-400">nicht erfasst</span>;
+    value = <span className="text-neutral-400">keine Baseline</span>;
   } else {
     const rem = fc.remainingKg.toFixed(1);
     if (fc.daysLeft !== null) {

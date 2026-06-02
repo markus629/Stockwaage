@@ -5,6 +5,7 @@ import {
   CartesianGrid,
   Line,
   LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -18,6 +19,8 @@ type Props = {
   readings: Reading[];
   days?: number; // Anzahl gestapelter Tage; ohne -> alle in readings
   onDaysChange?: (n: number) => void; // gesetzt -> Stepper anzeigen
+  baselineKg?: number; // Futter-Baseline als horizontale Linie
+  showBaseline?: boolean;
 };
 
 function localDayKey(ts: number): string {
@@ -56,7 +59,11 @@ export default function ScaleChart({
   readings,
   days,
   onDaysChange,
+  baselineKg,
+  showBaseline,
 }: Props) {
+  const baseOn =
+    !!showBaseline && typeof baselineKg === "number" && isFinite(baselineKg);
   const { data, dayKeys } = useMemo(() => {
     const cutoff =
       days === undefined
@@ -170,6 +177,20 @@ export default function ScaleChart({
               domain={["auto", "auto"]}
               tickFormatter={(v) => (v as number).toFixed(1)}
             />
+            {baseOn && (
+              <ReferenceLine
+                y={baselineKg}
+                stroke="#16a34a"
+                strokeDasharray="5 4"
+                ifOverflow="extendDomain"
+                label={{
+                  value: "Baseline",
+                  position: "insideBottomRight",
+                  fontSize: 10,
+                  fill: "#16a34a",
+                }}
+              />
+            )}
             <Tooltip
               formatter={(value, name) => [
                 `${Number(value).toFixed(2)} kg`,

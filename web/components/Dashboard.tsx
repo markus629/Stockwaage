@@ -86,7 +86,13 @@ export default function Dashboard({
           subtitle={sid}
           onClick={onScaleClick ? () => onScaleClick(sid) : undefined}
         >
-          <ScaleChart scaleId={sid} readings={windowReadings} days={DASHBOARD_DAYS} />
+          <ScaleChart
+            scaleId={sid}
+            readings={windowReadings}
+            days={DASHBOARD_DAYS}
+            baselineKg={scales[sid]?.feedBaselineKg}
+            showBaseline={scales[sid]?.feedBaselineVisible}
+          />
           <div className="mt-2 space-y-1 border-t border-neutral-100 pt-2">
             <LiveWeight reading={latest?.scales?.[sid]} />
             <ScaleSwarmStatus
@@ -98,10 +104,10 @@ export default function Dashboard({
             <ScaleFeedStatus
               dailyStats={dailyStats}
               scaleId={sid}
-              reserveKg={scales[sid]?.feedReserveKg}
               baselineKg={scales[sid]?.feedBaselineKg}
-              sinceTs={scales[sid]?.feedUpdatedAt}
+              baselineAt={scales[sid]?.feedBaselineAt}
               currentKg={latest?.scales?.[sid]?.kg}
+              stepThresholdKg={scales[sid]?.feedStepThresholdKg}
             />
           </div>
         </Tile>
