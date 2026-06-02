@@ -28,6 +28,7 @@ import {
 } from "@/lib/devices";
 import DebouncedInput from "./DebouncedInput";
 import PinSelect from "./PinSelect";
+import StarToggle from "./StarToggle";
 
 type Props = {
   deviceId: string;
@@ -201,6 +202,10 @@ export default function SettingsPanel({
         onEnabledChange={(v) =>
           updateMainConfig(deviceId, { bme280Enabled: v })
         }
+        onDashboard={mainCfg.bme280OnDashboard ?? false}
+        onDashboardChange={(v) =>
+          updateMainConfig(deviceId, { bme280OnDashboard: v })
+        }
         statusLines={[
           latest?.ambientC !== undefined
             ? `${latest.ambientC.toFixed(1)} °C`
@@ -232,6 +237,10 @@ export default function SettingsPanel({
         enabled={mainCfg.inaBatteryEnabled ?? false}
         onEnabledChange={(v) =>
           updateMainConfig(deviceId, { inaBatteryEnabled: v })
+        }
+        onDashboard={mainCfg.inaBatteryOnDashboard ?? false}
+        onDashboardChange={(v) =>
+          updateMainConfig(deviceId, { inaBatteryOnDashboard: v })
         }
         statusLines={[
           latest?.batteryV !== undefined
@@ -270,6 +279,10 @@ export default function SettingsPanel({
         onEnabledChange={(v) =>
           updateMainConfig(deviceId, { inaSolarEnabled: v })
         }
+        onDashboard={mainCfg.inaSolarOnDashboard ?? false}
+        onDashboardChange={(v) =>
+          updateMainConfig(deviceId, { inaSolarOnDashboard: v })
+        }
         statusLines={[
           latest?.solarV !== undefined
             ? `${latest.solarV.toFixed(2)} V`
@@ -305,6 +318,10 @@ export default function SettingsPanel({
         enabled={mainCfg.rainEnabled ?? false}
         onEnabledChange={(v) =>
           updateMainConfig(deviceId, { rainEnabled: v })
+        }
+        onDashboard={mainCfg.rainOnDashboard ?? false}
+        onDashboardChange={(v) =>
+          updateMainConfig(deviceId, { rainOnDashboard: v })
         }
         statusLines={[
           latest?.rainRaw !== undefined
@@ -584,6 +601,8 @@ function SensorSection({
   enabled,
   onEnabledChange,
   statusLines,
+  onDashboard,
+  onDashboardChange,
   children,
 }: {
   title: string;
@@ -591,30 +610,41 @@ function SensorSection({
   enabled: boolean;
   onEnabledChange: (v: boolean) => void;
   statusLines: Array<string | null>;
+  // Optional: Stern zum Anzeigen einer Graph-Kachel auf dem Dashboard.
+  onDashboard?: boolean;
+  onDashboardChange?: (v: boolean) => void;
   children: React.ReactNode;
 }) {
   const status = statusLines.filter((s): s is string => !!s).join(" · ");
   return (
     <section className="rounded-lg border border-neutral-200 bg-white p-4">
-      <label className="flex items-start gap-3">
-        <input
-          type="checkbox"
-          checked={enabled}
-          onChange={(e) => onEnabledChange(e.target.checked)}
-          className="mt-1"
-        />
-        <div className="flex-1">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <span className="text-sm font-semibold">{title}</span>
-            <span className="font-mono text-xs text-neutral-500">
-              {status || (enabled ? "wartet auf Daten…" : "deaktiviert")}
-            </span>
+      <div className="flex items-start gap-2">
+        <label className="flex flex-1 items-start gap-3">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(e) => onEnabledChange(e.target.checked)}
+            className="mt-1"
+          />
+          <div className="flex-1">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <span className="text-sm font-semibold">{title}</span>
+              <span className="font-mono text-xs text-neutral-500">
+                {status || (enabled ? "wartet auf Daten…" : "deaktiviert")}
+              </span>
+            </div>
+            {subtitle && (
+              <p className="mt-0.5 text-xs text-neutral-500">{subtitle}</p>
+            )}
           </div>
-          {subtitle && (
-            <p className="mt-0.5 text-xs text-neutral-500">{subtitle}</p>
-          )}
-        </div>
-      </label>
+        </label>
+        {enabled && onDashboardChange && (
+          <StarToggle
+            on={!!onDashboard}
+            onClick={() => onDashboardChange(!onDashboard)}
+          />
+        )}
+      </div>
       {enabled && <div className="mt-3 border-t border-neutral-200 pt-3">{children}</div>}
     </section>
   );

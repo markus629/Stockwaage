@@ -62,6 +62,11 @@ export type MainConfig = {
   wakePauseMin?: number;
   // Firmware auto-update
   autoUpdateEnabled?: boolean;
+  // Dashboard-Kacheln pro Umgebungssensor (UI-only, wie ScaleConfig.onDashboard)
+  bme280OnDashboard?: boolean;
+  inaBatteryOnDashboard?: boolean;
+  inaSolarOnDashboard?: boolean;
+  rainOnDashboard?: boolean;
   // Schwarm-Alarm-Schwellen (rein UI-seitig ausgewertet, Firmware ignoriert
   // sie): Gewichtssturz >= swarmDropKg innerhalb swarmWindowMin Minuten.
   swarmDropKg?: number;

@@ -54,18 +54,13 @@ export default function Dashboard({
 
   const dashboardScales = scaleIds.filter((sid) => scales[sid]?.onDashboard);
 
-  const showTemp =
-    !!mainCfg.bme280Enabled &&
-    windowReadings.some((r) => r.ambientC !== undefined);
+  // Sensor-Kacheln nur zeigen, wenn der Sensor aktiv UND mit Stern aufs
+  // Dashboard geheftet ist (analog zu den Waagen).
+  const showTemp = !!mainCfg.bme280Enabled && !!mainCfg.bme280OnDashboard;
   const showBattery =
-    !!mainCfg.inaBatteryEnabled &&
-    windowReadings.some((r) => r.batteryV !== undefined);
-  const showSolar =
-    !!mainCfg.inaSolarEnabled &&
-    windowReadings.some((r) => r.solarV !== undefined);
-  const showRain =
-    !!mainCfg.rainEnabled &&
-    windowReadings.some((r) => r.rainRaw !== undefined);
+    !!mainCfg.inaBatteryEnabled && !!mainCfg.inaBatteryOnDashboard;
+  const showSolar = !!mainCfg.inaSolarEnabled && !!mainCfg.inaSolarOnDashboard;
+  const showRain = !!mainCfg.rainEnabled && !!mainCfg.rainOnDashboard;
 
   const hasScales = dashboardScales.length > 0;
   const empty =
