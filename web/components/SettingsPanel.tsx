@@ -338,8 +338,9 @@ export default function SettingsPanel({
             ownerKey="Regensensor"
           />
           <Hint>
-            ADC1 (GPIO 1–10) ohne Konflikte. Werte: trocken ~0,
-            durchnässt nahe 4095.
+            Analog-Ausgang (AO) an ADC1 (GPIO 1–10). Skala: trocken ≈ hoch
+            (~4095), je nasser desto niedriger, klatschnass ≈ 0. Sensor mit
+            3,3 V versorgen (nicht 5 V – sonst zu hohe Spannung am ADC).
           </Hint>
         </Field>
       </SensorSection>
