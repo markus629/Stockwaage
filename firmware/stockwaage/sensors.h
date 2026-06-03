@@ -22,15 +22,11 @@ struct EnvReading {
 // Einmal beim Boot (ADC-Resolution etc.).
 void init();
 
-// I2C-Bus + aktivierte Sensoren initialisieren. Muss NACH cfg.load
-// aufgerufen werden. Sensoren ohne mainCfg.*Enabled werden uebersprungen.
+// BMP280 (Temperatur) initialisieren. Feste Pins/Adresse aus config.h.
 void initEnv(const MainConfig& cfg);
 
-// HX711-Instanzen mit den Pins aus der Runtime-Config initialisieren.
-// dtPins[i] <= 0 -> Waage i ist deaktiviert (kein HX711-init, kein Read).
-// sckPin = gemeinsamer Clock-Pin aller Waagen. Doppelte Pins werden
-// ignoriert (nur erstes Vorkommen wird aktiv).
-void initScales(const int dtPins[NUM_SCALES], int sckPin);
+// HX711 mit den festen Pins aus config.h initialisieren.
+void initScales();
 
 // liest alle aktiven HX711 in den Out-Array (Laenge NUM_SCALES).
 // Wert = NAN bei Timeout oder wenn Waage nicht aktiv ist.

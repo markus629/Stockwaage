@@ -40,33 +40,6 @@ bool RuntimeConfig::load(const String& idToken, const String& deviceId) {
                                                        main.intervalSec);
       main.stayAwakeUntilMs = (uint64_t)fb::readInteger(
                                   fields["stayAwakeUntilMs"], 0);
-      main.sckPin           = (int)fb::readInteger(fields["sckPin"],
-                                                   main.sckPin);
-      main.i2cSda           = (int)fb::readInteger(fields["i2cSda"],
-                                                   main.i2cSda);
-      main.i2cScl           = (int)fb::readInteger(fields["i2cScl"],
-                                                   main.i2cScl);
-      main.bme280Enabled    = fb::readBool   (fields["bme280Enabled"], false);
-      main.bme280Addr       = (int)fb::readInteger(fields["bme280Addr"],
-                                                   main.bme280Addr);
-      main.inaBatteryEnabled = fb::readBool  (fields["inaBatteryEnabled"],
-                                              false);
-      main.inaBatteryAddr    = (int)fb::readInteger(fields["inaBatteryAddr"],
-                                                    main.inaBatteryAddr);
-      main.inaSolarEnabled   = fb::readBool  (fields["inaSolarEnabled"], false);
-      main.inaSolarAddr      = (int)fb::readInteger(fields["inaSolarAddr"],
-                                                    main.inaSolarAddr);
-      main.rainEnabled       = fb::readBool  (fields["rainEnabled"], false);
-      main.rainPin           = (int)fb::readInteger(fields["rainPin"],
-                                                    main.rainPin);
-      main.wakeButtonEnabled = fb::readBool  (fields["wakeButtonEnabled"],
-                                              false);
-      main.wakeButtonPin     = (int)fb::readInteger(fields["wakeButtonPin"],
-                                                    main.wakeButtonPin);
-      main.wakeButtonLevel   = (int)fb::readInteger(fields["wakeButtonLevel"],
-                                                    main.wakeButtonLevel);
-      main.wakePauseMin      = (uint32_t)fb::readInteger(
-                                  fields["wakePauseMin"], main.wakePauseMin);
       main.autoUpdateEnabled = fb::readBool  (fields["autoUpdateEnabled"],
                                               false);
       main.deepSleepEnabled  = fb::readBool  (fields["deepSleepEnabled"], true);
@@ -85,14 +58,11 @@ bool RuntimeConfig::load(const String& idToken, const String& deviceId) {
         if (i < 0) continue;
         JsonObjectConst f = d["fields"];
         scales[i].exists      = true;
-        scales[i].enabled     = fb::readBool   (f["enabled"], false);
         scales[i].name        = fb::readString (f["name"], "");
         scales[i].offset      = fb::readNumber (f["offset"], 0.0);
         scales[i].scaleFactor = fb::readNumber (f["scaleFactor"], 0.0);
         scales[i].tempCoef    = fb::readNumber (f["tempCoef"], 0.0);
         scales[i].tempRefC    = fb::readNumber (f["tempRefC"], 20.0);
-        scales[i].dtPin       = (int)fb::readInteger(f["dtPin"],
-                                                     PIN_HX711_DT[i]);
       }
     }
   }
@@ -105,18 +75,16 @@ bool RuntimeConfig::saveScale(const String& idToken, const String& deviceId,
   const auto& s = scales[idx];
   DynamicJsonDocument doc(1024);
   JsonObject fields = doc.createNestedObject("fields");
-  fb::writeBool   (fields, "enabled",     s.enabled);
-  fb::writeString (fields, "name",        s.name);
   fb::writeNumber (fields, "offset",      s.offset);
   fb::writeNumber (fields, "scaleFactor", s.scaleFactor);
   fb::writeNumber (fields, "tempCoef",    s.tempCoef);
   fb::writeNumber (fields, "tempRefC",    s.tempRefC);
   String body;
   serializeJson(doc, body);
-  // updateMask: nur die ESP-Felder ueberschreiben, damit das vom Browser
-  // gesetzte "learning"-Feld erhalten bleibt.
+  // updateMask: nur die ESP-Felder (Kalibrierung) ueberschreiben. Name und
+  // UI-Felder (learning) bleiben unberuehrt.
   return fb::patchDoc(idToken, scaleDocPath(deviceId, idx), body,
-                      "enabled,name,offset,scaleFactor,tempCoef,tempRefC");
+                      "offset,scaleFactor,tempCoef,tempRefC");
 }
 
 bool RuntimeConfig::saveMain(const String& idToken,

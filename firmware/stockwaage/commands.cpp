@@ -86,7 +86,6 @@ bool processPending(const String& idToken, const String& deviceId,
         if (isnan(raw)) { err = "hx711 timeout"; }
         else {
           cfg.scales[idx].offset = raw;
-          if (!cfg.scales[idx].enabled) cfg.scales[idx].enabled = true;
           scaleDirty[idx] = true;
           ok = true;
         }

@@ -23,7 +23,6 @@
 #include "commands.h"
 #include "updater.h"
 #include "daily_stats.h"
-#include <Adafruit_NeoPixel.h>
 
 // ----- State (ueberlebt Deep Sleep) -----------------------------------------
 RTC_DATA_ATTR int     bootCount = 0;
@@ -48,13 +47,6 @@ uint32_t      bootIntervalSec;       // Build-/Portal-Default
 String        idToken;
 RuntimeConfig cfg;
 
-// Wake-Button-Settings, in NVS gecacht damit der Doppelklick schon VOR
-// dem WiFi-Connect erkannt werden kann.
-bool     wakeCfgEnabled = false;
-int      wakeCfgPin     = 5;
-int      wakeCfgLevel   = 0;
-uint32_t wakeCfgPauseMin = 30;
-
 // Ergebnis des GitHub-Release-Checks. Wird einmal pro Wakeup frueh in
 // setup() geholt (fuer Auto-Update) und im Heartbeat wiederverwendet.
 updater::LatestInfo gLatest;
@@ -67,13 +59,12 @@ void enterDeepSleep(uint32_t seconds) {
   if (seconds < 30) seconds = 30;
   Serial.printf("Deep Sleep %u s\n", seconds);
   Serial.flush();
-  // Sensoren schlafen legen (HX711 power_down, INA219 powerSave).
+  // HX711 schlafen legen (power_down). Der SCK-Pin (von power_down auf HIGH
+  // gelassen) wird ueber den Deep Sleep gehalten, sonst floatet er und der
+  // HX711 wacht wieder auf.
   bool scalesDown = sensors::powerDown();
-  // Damit der HX711 im Power-Down bleibt, muss der SCK-Pin (von power_down auf
-  // HIGH gelassen) ueber den Deep Sleep gehalten werden – sonst floatet er und
-  // der HX711 wacht wieder auf.
   if (scalesDown) {
-    gpio_num_t sck = (gpio_num_t)cfg.main.sckPin;
+    gpio_num_t sck = (gpio_num_t)PIN_HX711_SCK;
     if (rtc_gpio_is_valid_gpio(sck)) {
       gpio_hold_en(sck);
       gpio_deep_sleep_hold_en();
@@ -82,22 +73,6 @@ void enterDeepSleep(uint32_t seconds) {
   }
 
   esp_sleep_enable_timer_wakeup((uint64_t)seconds * 1000000ULL);
-  if (cfg.main.wakeButtonEnabled && cfg.main.wakeButtonPin > 0) {
-    gpio_num_t pin = (gpio_num_t)cfg.main.wakeButtonPin;
-    if (rtc_gpio_is_valid_gpio(pin)) {
-      // Bei LOW-Trigger den internen Pull-Up aktivieren, sonst Pull-Down.
-      if (cfg.main.wakeButtonLevel == 0) {
-        rtc_gpio_pullup_en(pin);
-        rtc_gpio_pulldown_dis(pin);
-      } else {
-        rtc_gpio_pulldown_en(pin);
-        rtc_gpio_pullup_dis(pin);
-      }
-      esp_sleep_enable_ext0_wakeup(pin, cfg.main.wakeButtonLevel);
-    } else {
-      Serial.printf("[wake] GPIO %d ist nicht RTC-faehig\n", (int)pin);
-    }
-  }
   esp_deep_sleep_start();
 }
 
@@ -112,44 +87,6 @@ void loadPrefs() {
   firebasePassword = prefs.getString("fbPass", "");
   deviceId         = prefs.getString("devId",  DEFAULT_DEVICE_ID);
   bootIntervalSec  = prefs.getUInt  ("interval", DEFAULT_INTERVAL_SEC);
-  wakeCfgEnabled   = prefs.getBool  ("wkEn",   false);
-  wakeCfgPin       = prefs.getInt   ("wkPin",  5);
-  wakeCfgLevel     = prefs.getInt   ("wkLvl",  0);
-  wakeCfgPauseMin  = prefs.getUInt  ("wkPause", 30);
-}
-
-// Onboard-LED kurz gruen blinken (Bestaetigung Messpause).
-void blinkPause() {
-  Adafruit_NeoPixel px(1, PIN_NEOPIXEL, NEO_GRB + NEO_KHZ800);
-  px.begin();
-  for (int i = 0; i < 3; i++) {
-    px.setPixelColor(0, px.Color(0, 50, 0));
-    px.show();
-    delay(150);
-    px.clear();
-    px.show();
-    delay(150);
-  }
-}
-
-// Nach ext0-Wakeup pruefen ob ein zweiter Tastendruck folgt (Doppelklick).
-// Der erste Druck haelt den Pin beim Boot noch aktiv -> erst Loslassen
-// abwarten, dann ~1.5s Fenster auf den zweiten Druck.
-bool detectDoublePress(int pin, int level) {
-  const int active = (level == 0) ? LOW : HIGH;
-  pinMode(pin, (level == 0) ? INPUT_PULLUP : INPUT_PULLDOWN);
-  uint32_t t = millis();
-  while (digitalRead(pin) == active && millis() - t < 1500) delay(5);
-  delay(40);  // entprellen
-  t = millis();
-  while (millis() - t < 1500) {
-    if (digitalRead(pin) == active) {
-      delay(40);
-      return true;
-    }
-    delay(5);
-  }
-  return false;
 }
 
 bool ensureWiFi(bool forcePortal) {
@@ -305,15 +242,9 @@ bool measureAndUpload() {
   return true;
 }
 
-// HX711-Pins + Umgebungssensoren aus der aktuellen Config (neu) initialisieren.
-// Idempotent -> auch im Wachbetrieb bei geaenderten Pins/Sensoren aufrufbar.
+// HX711 + BMP280 initialisieren (feste Pins aus config.h). Idempotent.
 void initSensorsFromCfg() {
-  int dtPins[NUM_SCALES];
-  for (int i = 0; i < NUM_SCALES; i++) {
-    // Waagen ohne Doku (exists=false) ueberspringen -> dtPin=-1.
-    dtPins[i] = cfg.scales[i].exists ? cfg.scales[i].dtPin : -1;
-  }
-  sensors::initScales(dtPins, cfg.main.sckPin);
+  sensors::initScales();
   sensors::initEnv(cfg.main);
 }
 
@@ -462,22 +393,6 @@ void setup() {
 
   loadPrefs();
 
-  // Doppelklick auf den Wake-Button = Messpause. Wird VOR dem WiFi-Connect
-  // geprueft, damit das Zeitfenster fuer den zweiten Druck nicht verstreicht.
-  if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT0 &&
-      wakeCfgEnabled && wakeCfgPin > 0) {
-    if (detectDoublePress(wakeCfgPin, wakeCfgLevel)) {
-      Serial.printf("[wake] Doppelklick -> Messpause %u min\n",
-                    wakeCfgPauseMin);
-      blinkPause();
-      // ext0-Config aus Cache, damit man die Pause per 1x-Druck beenden kann.
-      cfg.main.wakeButtonEnabled = wakeCfgEnabled;
-      cfg.main.wakeButtonPin     = wakeCfgPin;
-      cfg.main.wakeButtonLevel   = wakeCfgLevel;
-      enterDeepSleep(wakeCfgPauseMin * 60);
-    }
-  }
-
   if (!ensureWiFi(forcePortal)) {
     Serial.println("WiFi failed -> sleep");
     enterDeepSleep(bootIntervalSec);
@@ -497,14 +412,7 @@ void setup() {
   cfg.main.intervalSec = bootIntervalSec;
   cfg.load(idToken, deviceId);
 
-  // Wake-Settings fuer den naechsten Boot cachen (Doppelklick-Erkennung
-  // vor WiFi).
-  prefs.putBool("wkEn",  cfg.main.wakeButtonEnabled);
-  prefs.putInt ("wkPin", cfg.main.wakeButtonPin);
-  prefs.putInt ("wkLvl", cfg.main.wakeButtonLevel);
-  prefs.putUInt("wkPause", cfg.main.wakePauseMin);
-
-  // HX711 + I2C-Sensoren (BME280, INA219x2) + Regensensor aus der Config.
+  // HX711 + BMP280 initialisieren (feste Pins).
   initSensorsFromCfg();
 
   bool cfgChanged = false;

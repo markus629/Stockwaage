@@ -56,7 +56,6 @@ jobs:
             "HX711 Arduino Library" \
             "WiFiManager" \
             "Adafruit BMP280 Library" \
-            "Adafruit INA219" \
             "Adafruit Unified Sensor"
 
       - name: Generate version header
