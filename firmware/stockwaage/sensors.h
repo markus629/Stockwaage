@@ -46,4 +46,10 @@ void readEnv(EnvReading& out, const MainConfig& cfg);
 // Akku-Spannung (Spannungsteiler auf ADC). Fallback wenn kein INA219.
 float readVBat();
 
+// Sensoren vor dem Deep Sleep stromsparend schlafen legen: HX711 power_down,
+// INA219 powerSave. Der BME280 laeuft im Forced-Mode und schlaeft ohnehin
+// nach jeder Messung selbst. Liefert true, wenn mind. eine Waage aktiv war
+// (-> der SCK-Pin sollte ueber den Sleep gehalten werden).
+bool powerDown();
+
 } // namespace sensors

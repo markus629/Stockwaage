@@ -11,6 +11,7 @@
 #include <ArduinoJson.h>
 #include <Preferences.h>
 #include <driver/rtc_io.h>
+#include <driver/gpio.h>
 #include <esp_sleep.h>
 #include <time.h>
 #include <math.h>
@@ -27,6 +28,9 @@
 // ----- State (ueberlebt Deep Sleep) -----------------------------------------
 RTC_DATA_ATTR int     bootCount = 0;
 RTC_DATA_ATTR uint8_t failureStreak = 0;
+// SCK-Pin, der vor dem Deep Sleep gehalten wurde (HX711 bleibt power_down).
+// -1 = keiner. Wird beim Boot wieder freigegeben.
+RTC_DATA_ATTR int     rtcHeldSckPin = -1;
 
 // GitHub-Release-Check wird nur ~1x/Tag durchgefuehrt (spart Calls + Strom).
 // Letztes Ergebnis ueberlebt Deep Sleep im RTC-RAM (Strings als char-Puffer,
@@ -63,6 +67,20 @@ void enterDeepSleep(uint32_t seconds) {
   if (seconds < 30) seconds = 30;
   Serial.printf("Deep Sleep %u s\n", seconds);
   Serial.flush();
+  // Sensoren schlafen legen (HX711 power_down, INA219 powerSave).
+  bool scalesDown = sensors::powerDown();
+  // Damit der HX711 im Power-Down bleibt, muss der SCK-Pin (von power_down auf
+  // HIGH gelassen) ueber den Deep Sleep gehalten werden – sonst floatet er und
+  // der HX711 wacht wieder auf.
+  if (scalesDown) {
+    gpio_num_t sck = (gpio_num_t)cfg.main.sckPin;
+    if (rtc_gpio_is_valid_gpio(sck)) {
+      gpio_hold_en(sck);
+      gpio_deep_sleep_hold_en();
+      rtcHeldSckPin = (int)sck;
+    }
+  }
+
   esp_sleep_enable_timer_wakeup((uint64_t)seconds * 1000000ULL);
   if (cfg.main.wakeButtonEnabled && cfg.main.wakeButtonPin > 0) {
     gpio_num_t pin = (gpio_num_t)cfg.main.wakeButtonPin;
@@ -430,6 +448,14 @@ void setup() {
   delay(200);
   bootCount++;
   Serial.printf("\n=== Stockwaage Boot #%d ===\n", bootCount);
+
+  // Falls vor dem Deep Sleep der SCK-Pin gehalten wurde (HX711 power_down):
+  // Hold wieder loesen, sonst laesst sich der Pin nicht neu konfigurieren.
+  gpio_deep_sleep_hold_dis();
+  if (rtcHeldSckPin >= 0) {
+    gpio_hold_dis((gpio_num_t)rtcHeldSckPin);
+    rtcHeldSckPin = -1;
+  }
 
   bool forcePortal = shouldForcePortal();
   if (forcePortal) Serial.println("BOOT-Taster -> Portal");

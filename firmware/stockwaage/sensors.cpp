@@ -152,4 +152,20 @@ float readVBat() {
   return (raw / VBAT_ADC_MAX) * VBAT_ADC_REF * VBAT_DIVIDER;
 }
 
+bool powerDown() {
+  bool anyScale = false;
+  for (int i = 0; i < NUM_SCALES; i++) {
+    if (hxActive[i]) {
+      hx[i].power_down();   // HX711 in Standby (~1.5mA -> ~1.5uA)
+      anyScale = true;
+    }
+  }
+  // INA219 in Power-Down (~1mA -> ~6uA). Beim naechsten Boot re-initialisiert
+  // initEnv die INAs wieder (begin + setCalibration).
+  if (inaBatReady && inaBat) inaBat->powerSave(true);
+  if (inaSolReady && inaSol) inaSol->powerSave(true);
+  // BME280: Forced-Mode -> schlaeft nach jeder Messung selbst, nichts zu tun.
+  return anyScale;
+}
+
 } // namespace sensors
