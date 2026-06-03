@@ -233,7 +233,7 @@ function DeviceDetail() {
             href="/"
             className="text-sm text-neutral-500 hover:text-neutral-900"
           >
-            ← Geräte
+            ← Übersicht
           </Link>
           <h1 className="mt-1 text-2xl font-semibold">{deviceId}</h1>
         </div>

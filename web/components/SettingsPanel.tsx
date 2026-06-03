@@ -86,36 +86,6 @@ export default function SettingsPanel({
         </div>
       </Section>
 
-      <SensorSection
-        title="Temperatursensor (BMP280)"
-        subtitle="Temperatur für die Gewichts-Kompensation (Luftdruck nebenbei). Der BMP280 hat keine Luftfeuchte."
-        enabled={mainCfg.bme280Enabled ?? false}
-        onEnabledChange={(v) =>
-          updateMainConfig(deviceId, { bme280Enabled: v })
-        }
-        onDashboard={mainCfg.bme280OnDashboard ?? false}
-        onDashboardChange={(v) =>
-          updateMainConfig(deviceId, { bme280OnDashboard: v })
-        }
-        statusLines={[
-          latest?.ambientC !== undefined
-            ? `${latest.ambientC.toFixed(1)} °C`
-            : null,
-          latest?.ambientPressure !== undefined
-            ? `${latest.ambientPressure.toFixed(0)} hPa`
-            : null,
-        ]}
-      >
-        <Field label="I2C-Adresse">
-          <AddrSelect
-            value={mainCfg.bme280Addr ?? DEFAULT_BME280_ADDR}
-            allowed={BME280_ADDRS}
-            onChange={(v) => updateMainConfig(deviceId, { bme280Addr: v })}
-          />
-          <Hint>Standard 0x76; 0x77 wenn SDO am Modul auf VCC liegt.</Hint>
-        </Field>
-      </SensorSection>
-
       <Section
         title="Schwarm-Alarm"
         subtitle="Wann gilt ein Gewichtssturz als möglicher Schwarm? Wird im Dashboard ausgewertet (rein clientseitig)."

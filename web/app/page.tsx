@@ -12,6 +12,7 @@ import { limit, onSnapshot, orderBy, query } from "firebase/firestore";
 import { auth } from "@/lib/firebase";
 import { devicesCol, readingsCol, type Device, type Reading } from "@/lib/devices";
 import OnlineDot from "@/components/OnlineDot";
+import FirmwareFleet from "@/components/FirmwareFleet";
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -110,21 +111,24 @@ export default function Home() {
       </header>
 
       <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-neutral-500">
-        Beuten
+        Waagen
       </h2>
       {devices.length === 0 ? (
         <p className="text-neutral-500">
-          Noch keine Geräte. Starte einen ESP – sobald er sich verbunden hat,
+          Noch keine Waage. Starte einen ESP – sobald er sich verbunden hat,
           erscheint er hier.
         </p>
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {devices.map((d) => (
-            <li key={d.id}>
-              <DeviceTile device={d} latest={latest[d.id]} />
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {devices.map((d) => (
+              <li key={d.id}>
+                <DeviceTile device={d} latest={latest[d.id]} />
+              </li>
+            ))}
+          </ul>
+          <FirmwareFleet devices={devices} />
+        </>
       )}
     </main>
   );
