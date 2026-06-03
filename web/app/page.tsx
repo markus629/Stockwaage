@@ -8,9 +8,9 @@ import {
   signOut,
   type User,
 } from "firebase/auth";
-import { onSnapshot } from "firebase/firestore";
+import { limit, onSnapshot, orderBy, query } from "firebase/firestore";
 import { auth } from "@/lib/firebase";
-import { devicesCol, type Device } from "@/lib/devices";
+import { devicesCol, readingsCol, type Device, type Reading } from "@/lib/devices";
 import OnlineDot from "@/components/OnlineDot";
 
 export default function Home() {
@@ -19,6 +19,7 @@ export default function Home() {
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState<string | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
+  const [latest, setLatest] = useState<Record<string, Reading | null>>({});
 
   useEffect(() => onAuthStateChanged(auth, setUser), []);
 
@@ -30,6 +31,25 @@ export default function Home() {
       );
     });
   }, [user]);
+
+  // Letzten Messwert je Gerät live abonnieren (fuer Gewicht/Temp in der Kachel).
+  const ids = devices.map((d) => d.id).sort();
+  const idsKey = ids.join(",");
+  useEffect(() => {
+    if (!user || ids.length === 0) return;
+    const unsubs = ids.map((id) =>
+      onSnapshot(
+        query(readingsCol(id), orderBy("ts", "desc"), limit(1)),
+        (snap) =>
+          setLatest((prev) => ({
+            ...prev,
+            [id]: (snap.docs[0]?.data() as Reading) ?? null,
+          })),
+      ),
+    );
+    return () => unsubs.forEach((u) => u());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, idsKey]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -90,42 +110,74 @@ export default function Home() {
       </header>
 
       <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-neutral-500">
-        Geräte
+        Beuten
       </h2>
       {devices.length === 0 ? (
         <p className="text-neutral-500">
-          Noch keine Geräte. Starte den ESP, sobald er sich verbunden hat,
+          Noch keine Geräte. Starte einen ESP – sobald er sich verbunden hat,
           erscheint er hier.
         </p>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">
           {devices.map((d) => (
             <li key={d.id}>
-              <Link
-                href={`/device?id=${encodeURIComponent(d.id)}`}
-                className="block rounded-lg border border-neutral-200 bg-white p-4 transition hover:border-neutral-400"
-              >
-                <div className="flex items-baseline justify-between">
-                  <span className="font-medium">{d.id}</span>
-                  <span className="text-xs text-neutral-500">
-                    {d.lastSeen ? formatAgo(d.lastSeen) : "—"}
-                    <OnlineDot
-                      lastSeen={d.lastSeen}
-                      intervalSec={d.intervalSec}
-                    />
-                  </span>
-                </div>
-                <div className="mt-1 flex gap-4 text-xs text-neutral-500">
-                  {d.vBat !== undefined && <span>Akku {d.vBat.toFixed(2)} V</span>}
-                  {d.intervalSec && <span>Intervall {d.intervalSec}s</span>}
-                </div>
-              </Link>
+              <DeviceTile device={d} latest={latest[d.id]} />
             </li>
           ))}
         </ul>
       )}
     </main>
   );
+}
+
+function DeviceTile({
+  device,
+  latest,
+}: {
+  device: Device;
+  latest: Reading | null | undefined;
+}) {
+  const kg = primaryKg(latest);
+  const tempC = latest?.ambientC;
+  const vBat = device.vBat ?? latest?.vBat;
+
+  return (
+    <Link
+      href={`/device?id=${encodeURIComponent(device.id)}`}
+      className="block rounded-lg border border-neutral-200 bg-white p-4 transition hover:border-neutral-400 hover:bg-neutral-50"
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="font-medium">{device.id}</span>
+        <span className="text-xs text-neutral-500">
+          {device.lastSeen ? formatAgo(device.lastSeen) : "—"}
+          <OnlineDot lastSeen={device.lastSeen} intervalSec={device.intervalSec} />
+        </span>
+      </div>
+
+      <div className="mt-2 font-mono text-2xl font-semibold tabular-nums">
+        {kg !== undefined ? `${kg.toFixed(2)} kg` : "—"}
+      </div>
+
+      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-500">
+        <span>
+          {tempC !== undefined ? `${tempC.toFixed(1)} °C` : "– °C"}
+        </span>
+        <span>{vBat !== undefined ? `${vBat.toFixed(2)} V` : "– V"}</span>
+        {device.intervalSec && <span>Intervall {device.intervalSec}s</span>}
+      </div>
+    </Link>
+  );
+}
+
+// Gewicht der ersten (kalibrierten) Waage des Geräts – bei 1-ESP-pro-Beute
+// ist das die einzige.
+function primaryKg(r: Reading | null | undefined): number | undefined {
+  if (!r?.scales) return undefined;
+  for (const k of Object.keys(r.scales).sort()) {
+    const kg = r.scales[k]?.kg;
+    if (typeof kg === "number" && isFinite(kg)) return kg;
+  }
+  return undefined;
 }
 
 function formatAgo(tsMs: number): string {
