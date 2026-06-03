@@ -14,14 +14,11 @@ import {
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import {
-  addScale,
   commentsCol,
-  computePinOwners,
   dailyStatsCol,
   deviceDoc,
   liveDoc,
   mainConfigDoc,
-  MAX_SCALES,
   readingsCol,
   removeScale,
   scalesCol,
@@ -33,18 +30,13 @@ import {
   type ScaleConfig,
 } from "@/lib/devices";
 import CalibrationWizard from "@/components/CalibrationWizard";
-import Dashboard from "@/components/Dashboard";
 import OnlineDot from "@/components/OnlineDot";
 import ScaleCard from "@/components/ScaleCard";
 import SettingsPanel from "@/components/SettingsPanel";
 import { useDeviceTab, useScaleUiPrefs } from "@/lib/uiPrefs";
 
-// Rohdaten werden NICHT mehr pauschal als 21-Tage-Live-Listener geladen
-// (das waren ~2000 Reads pro Seitenaufruf). Stattdessen lazy pro Tab und
-// nur so viele Tage wie der jeweilige Tab wirklich braucht – per getDocs
-// (einmalig) statt Live-Listener. Der aktuelle Messwert kommt weiter live
-// ueber `latest` (1 Dokument).
-const DASHBOARD_RAW_DAYS = 3;
+// Rohdaten werden lazy pro Tab geladen (getDocs, kein Dauer-Listener); der
+// aktuelle Messwert kommt live ueber `latest`/`live`.
 const DEFAULT_STACK_DAYS = 7;
 
 export default function Page() {
@@ -94,17 +86,8 @@ function DeviceDetail() {
   const [dailyStats, setDailyStats] = useState<DailyStat[]>([]);
   const [dailyLoaded, setDailyLoaded] = useState(false);
   const [wizardFor, setWizardFor] = useState<string | null>(null);
-  const [scrollToScale, setScrollToScale] = useState<string | null>(null);
   const uiPrefs = useScaleUiPrefs(deviceId);
   const [tab, setTab] = useDeviceTab(deviceId);
-
-  // Klick auf eine Dashboard-Kachel -> in den Waagen-Tab springen, die Karte
-  // aufklappen und dorthin scrollen.
-  function goToScale(sid: string) {
-    uiPrefs.set(sid, { cardOpen: true });
-    setTab("scales");
-    setScrollToScale(sid);
-  }
 
   useEffect(() => onAuthStateChanged(auth, setUser), []);
 
@@ -165,15 +148,6 @@ function DeviceDetail() {
     return latest;
   }, [live, latest]);
 
-  // Nach dem Tab-Wechsel zur angeklickten Waage scrollen.
-  useEffect(() => {
-    if (tab !== "scales" || !scrollToScale) return;
-    document
-      .getElementById(`scale-${scrollToScale}`)
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
-    setScrollToScale(null);
-  }, [tab, scrollToScale]);
-
   // Beim Geraetewechsel die lazy geladenen Daten verwerfen.
   useEffect(() => {
     setWindowReadings([]);
@@ -190,13 +164,9 @@ function DeviceDetail() {
     ? Math.max(
         ...scaleIds.map((sid) => uiPrefs.get(sid).stackDays ?? DEFAULT_STACK_DAYS),
       )
-    : DASHBOARD_RAW_DAYS;
-  const neededRawDays =
-    tab === "dashboard"
-      ? DASHBOARD_RAW_DAYS
-      : tab === "scales"
-        ? maxStackDays
-        : 0;
+    : DEFAULT_STACK_DAYS;
+  // Waagen-Tab: so viele Tage wie der groesste Stepper; Einstellungen: keine.
+  const neededRawDays = tab === "scales" ? maxStackDays : 0;
 
   // Rohdaten lazy per getDocs nachladen (einmalig, kein Live-Listener).
   // Nur wenn der Tab mehr Tage braucht als bereits geladen sind.
@@ -236,11 +206,6 @@ function DeviceDetail() {
       cancelled = true;
     };
   }, [user, deviceId, tab, dailyLoaded]);
-
-  const pinOwners = useMemo(
-    () => computePinOwners(scales, scaleIds, mainCfg),
-    [scales, scaleIds, mainCfg],
-  );
 
   if (user === "loading") return <div className="p-6">Laden…</div>;
   if (!user)
@@ -291,17 +256,8 @@ function DeviceDetail() {
       </header>
 
       <nav className="mb-4 flex border-b border-neutral-200">
-        <TopTab
-          active={tab === "dashboard"}
-          onClick={() => setTab("dashboard")}
-        >
-          Dashboard
-        </TopTab>
         <TopTab active={tab === "scales"} onClick={() => setTab("scales")}>
-          Waagen
-          <span className="ml-1.5 text-xs text-neutral-400">
-            ({scaleIds.length})
-          </span>
+          Waage
         </TopTab>
         <TopTab
           active={tab === "settings"}
@@ -311,25 +267,12 @@ function DeviceDetail() {
         </TopTab>
       </nav>
 
-      {tab === "dashboard" && (
-        <Dashboard
-          readings={windowReadings}
-          latest={current}
-          scales={scales}
-          scaleIds={scaleIds}
-          mainCfg={mainCfg}
-          dailyStats={dailyStats}
-          onScaleClick={goToScale}
-        />
-      )}
-
       {tab === "scales" && (
         <section>
           <ul className="grid gap-3">
-            {scaleIds.map((sid) => (
+            {(scaleIds.length ? scaleIds : ["s1"]).map((sid) => (
               <ScaleCard
                 key={sid}
-                anchorId={`scale-${sid}`}
                 deviceId={deviceId}
                 scaleId={sid}
                 cfg={scales[sid] ?? { id: sid }}
@@ -345,25 +288,6 @@ function DeviceDetail() {
               />
             ))}
           </ul>
-          {scaleIds.length === 0 && (
-            <p className="mb-3 rounded border border-dashed border-neutral-300 bg-white p-4 text-center text-sm text-neutral-500">
-              Noch keine Waage konfiguriert. Mit „+ Waage hinzufügen“ legst
-              du eine an. Der ESP übernimmt die Pin-Belegung beim nächsten
-              Wakeup.
-            </p>
-          )}
-          {scaleIds.length < MAX_SCALES && (
-            <button
-              type="button"
-              onClick={() => addScale(deviceId, scaleIds, pinOwners)}
-              className="mt-3 w-full rounded-lg border border-dashed border-neutral-300 bg-white px-3 py-3 text-sm font-medium text-neutral-600 hover:border-neutral-500 hover:bg-neutral-50"
-            >
-              + Waage hinzufügen{" "}
-              <span className="text-xs font-normal text-neutral-400">
-                ({scaleIds.length}/{MAX_SCALES})
-              </span>
-            </button>
-          )}
         </section>
       )}
 
