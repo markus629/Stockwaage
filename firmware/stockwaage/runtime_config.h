@@ -31,12 +31,9 @@ class RuntimeConfig {
   // Fehlende Dokumente sind ok -> Defaults bleiben.
   bool load(const String& idToken, const String& deviceId);
 
-  // Schreibt nur die Felder einer einzelnen Waage.
+  // Schreibt nur die Felder einer einzelnen Waage (Kalibrierung).
   bool saveScale(const String& idToken, const String& deviceId,
                  int scaleIdx) const;
-
-  // Schreibt main-Config (stayAwakeUntilMs etc.)
-  bool saveMain(const String& idToken, const String& deviceId) const;
 
   // Hilfsmethode: kg aus raw rechnen unter Verwendung der Kompensation.
   // Liefert NaN wenn Waage nicht kalibriert.

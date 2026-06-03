@@ -241,6 +241,9 @@ export const devicesCol = () => collection(db, "users", ownerUid, "devices");
 export const deviceDoc = (id: string) => doc(db, ...devicePath(id));
 export const mainConfigDoc = (id: string) =>
   doc(db, ...devicePath(id), "config", "main");
+// GLOBALE Config (gilt fuer alle ESPs): users/{uid}/config/main.
+export const globalConfigDoc = () =>
+  doc(db, "users", ownerUid, "config", "main");
 export const scaleDoc = (id: string, scaleId: string) =>
   doc(db, ...devicePath(id), "scales", scaleId);
 export const scalesCol = (id: string) =>
@@ -322,6 +325,13 @@ export async function updateMainConfig(
   patch: Partial<MainConfig>,
 ): Promise<void> {
   await setDoc(mainConfigDoc(deviceId), patch, { merge: true });
+}
+
+// Globale Einstellungen fuer alle ESPs.
+export async function updateGlobalConfig(
+  patch: Partial<MainConfig>,
+): Promise<void> {
+  await setDoc(globalConfigDoc(), patch, { merge: true });
 }
 
 export async function addScale(

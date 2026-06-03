@@ -100,7 +100,13 @@ export default function Home() {
       <header className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Stockwaage</h1>
         <div className="flex items-center gap-3 text-sm">
-          <span className="text-neutral-500">{user.email}</span>
+          <Link
+            href="/settings"
+            className="rounded border border-neutral-300 px-2 py-1 hover:bg-neutral-100"
+          >
+            ⚙ Einstellungen
+          </Link>
+          <span className="hidden text-neutral-500 sm:inline">{user.email}</span>
           <button
             onClick={() => signOut(auth)}
             className="rounded border border-neutral-300 px-2 py-1 hover:bg-neutral-100"

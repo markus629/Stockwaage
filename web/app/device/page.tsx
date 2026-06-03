@@ -17,8 +17,8 @@ import {
   commentsCol,
   dailyStatsCol,
   deviceDoc,
+  globalConfigDoc,
   liveDoc,
-  mainConfigDoc,
   readingsCol,
   removeScale,
   scalesCol,
@@ -32,8 +32,7 @@ import {
 import CalibrationWizard from "@/components/CalibrationWizard";
 import OnlineDot from "@/components/OnlineDot";
 import ScaleCard from "@/components/ScaleCard";
-import SettingsPanel from "@/components/SettingsPanel";
-import { useDeviceTab, useScaleUiPrefs } from "@/lib/uiPrefs";
+import { useScaleUiPrefs } from "@/lib/uiPrefs";
 
 // Rohdaten werden lazy pro Tab geladen (getDocs, kein Dauer-Listener); der
 // aktuelle Messwert kommt live ueber `latest`/`live`.
@@ -44,30 +43,6 @@ export default function Page() {
     <Suspense fallback={<div className="p-6">Laden…</div>}>
       <DeviceDetail />
     </Suspense>
-  );
-}
-
-function TopTab({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${
-        active
-          ? "border-neutral-900 text-neutral-900"
-          : "border-transparent text-neutral-500 hover:text-neutral-900"
-      }`}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -87,7 +62,6 @@ function DeviceDetail() {
   const [dailyLoaded, setDailyLoaded] = useState(false);
   const [wizardFor, setWizardFor] = useState<string | null>(null);
   const uiPrefs = useScaleUiPrefs(deviceId);
-  const [tab, setTab] = useDeviceTab(deviceId);
 
   useEffect(() => onAuthStateChanged(auth, setUser), []);
 
@@ -100,7 +74,7 @@ function DeviceDetail() {
       ),
     );
     unsubs.push(
-      onSnapshot(mainConfigDoc(deviceId), (s) =>
+      onSnapshot(globalConfigDoc(), (s) =>
         setMainCfg((s.exists() ? s.data() : {}) as MainConfig),
       ),
     );
@@ -166,7 +140,7 @@ function DeviceDetail() {
       )
     : DEFAULT_STACK_DAYS;
   // Waagen-Tab: so viele Tage wie der groesste Stepper; Einstellungen: keine.
-  const neededRawDays = tab === "scales" ? maxStackDays : 0;
+  const neededRawDays = maxStackDays;
 
   // Rohdaten lazy per getDocs nachladen (einmalig, kein Live-Listener).
   // Nur wenn der Tab mehr Tage braucht als bereits geladen sind.
@@ -193,7 +167,7 @@ function DeviceDetail() {
   // Waagen-Tab, einmalig per getDocs. In den Einstellungen gar nicht.
   useEffect(() => {
     if (!user || user === "loading" || !deviceId) return;
-    if (tab === "settings" || dailyLoaded) return;
+    if (dailyLoaded) return;
     let cancelled = false;
     getDocs(query(dailyStatsCol(deviceId), orderBy("date", "asc"))).then(
       (snap) => {
@@ -205,7 +179,7 @@ function DeviceDetail() {
     return () => {
       cancelled = true;
     };
-  }, [user, deviceId, tab, dailyLoaded]);
+  }, [user, deviceId, dailyLoaded]);
 
   if (user === "loading") return <div className="p-6">Laden…</div>;
   if (!user)
@@ -255,51 +229,27 @@ function DeviceDetail() {
         </div>
       </header>
 
-      <nav className="mb-4 flex border-b border-neutral-200">
-        <TopTab active={tab === "scales"} onClick={() => setTab("scales")}>
-          Waage
-        </TopTab>
-        <TopTab
-          active={tab === "settings"}
-          onClick={() => setTab("settings")}
-        >
-          Einstellungen
-        </TopTab>
-      </nav>
-
-      {tab === "scales" && (
-        <section>
-          <ul className="grid gap-3">
-            {(scaleIds.length ? scaleIds : ["s1"]).map((sid) => (
-              <ScaleCard
-                key={sid}
-                deviceId={deviceId}
-                scaleId={sid}
-                cfg={scales[sid] ?? { id: sid }}
-                reading={current?.scales?.[sid]}
-                readings={windowReadings}
-                prefs={uiPrefs.get(sid)}
-                comments={comments.filter((c) => c.scaleId === sid)}
-                dailyStats={dailyStats}
-                feedStepThresholdKg={mainCfg.feedStepThresholdKg}
-                onPrefsChange={(patch) => uiPrefs.set(sid, patch)}
-                onCalibrate={() => setWizardFor(sid)}
-                onDelete={() => removeScale(deviceId, sid)}
-              />
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {tab === "settings" && (
-        <SettingsPanel
-          deviceId={deviceId}
-          device={device}
-          mainCfg={mainCfg}
-          latest={latest}
-          intervalSecFallback={device?.intervalSec}
-        />
-      )}
+      <section>
+        <ul className="grid gap-3">
+          {(scaleIds.length ? scaleIds : ["s1"]).map((sid) => (
+            <ScaleCard
+              key={sid}
+              deviceId={deviceId}
+              scaleId={sid}
+              cfg={scales[sid] ?? { id: sid }}
+              reading={current?.scales?.[sid]}
+              readings={windowReadings}
+              prefs={uiPrefs.get(sid)}
+              comments={comments.filter((c) => c.scaleId === sid)}
+              dailyStats={dailyStats}
+              feedStepThresholdKg={mainCfg.feedStepThresholdKg}
+              onPrefsChange={(patch) => uiPrefs.set(sid, patch)}
+              onCalibrate={() => setWizardFor(sid)}
+              onDelete={() => removeScale(deviceId, sid)}
+            />
+          ))}
+        </ul>
+      </section>
 
       {wizardFor && (
         <CalibrationWizard
