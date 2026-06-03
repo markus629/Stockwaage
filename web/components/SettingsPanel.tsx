@@ -119,7 +119,11 @@ export default function SettingsPanel({
           />
           <Hint>
             Standard GPIO 4. Wirkt beim nächsten ESP-Wakeup (bzw. sofort, wenn
-            Deep Sleep aus ist).
+            Deep Sleep aus ist). Für minimalen Stromverbrauch einen{" "}
+            <strong>RTC-fähigen Pin (GPIO ≤ 21)</strong> wählen: nur dann hält
+            der ESP den HX711 im Deep Sleep zuverlässig im Stromspar-Modus
+            (power_down). Höhere Pins funktionieren, sparen aber im Schlaf
+            weniger Strom.
           </Hint>
         </Field>
       </Section>
