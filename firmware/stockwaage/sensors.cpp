@@ -2,7 +2,7 @@
 #include "runtime_config.h"
 #include <HX711.h>
 #include <Wire.h>
-#include <Adafruit_BME280.h>
+#include <Adafruit_BMP280.h>
 #include <Adafruit_INA219.h>
 #include <math.h>
 
@@ -10,8 +10,8 @@ namespace {
 HX711 hx[NUM_SCALES];
 bool  hxActive[NUM_SCALES] = {false};
 
-Adafruit_BME280 bme;
-bool bmeReady = false;
+Adafruit_BMP280 bmp;   // Hardware: BMP280 (Temp + Druck, KEINE Feuchte)
+bool bmpReady = false;
 
 Adafruit_INA219* inaBat = nullptr;
 Adafruit_INA219* inaSol = nullptr;
@@ -54,7 +54,7 @@ void initEnv(const MainConfig& cfg) {
   // freigeben, sonst leaken die INA219-Objekte.
   if (inaBat) { delete inaBat; inaBat = nullptr; }
   if (inaSol) { delete inaSol; inaSol = nullptr; }
-  bmeReady = inaBatReady = inaSolReady = false;
+  bmpReady = inaBatReady = inaSolReady = false;
 
   const bool needI2C = cfg.bme280Enabled || cfg.inaBatteryEnabled ||
                        cfg.inaSolarEnabled;
@@ -66,17 +66,16 @@ void initEnv(const MainConfig& cfg) {
   }
 
   if (cfg.bme280Enabled) {
-    bmeReady = bme.begin((uint8_t)cfg.bme280Addr, &Wire);
-    if (!bmeReady) {
-      Serial.printf("[bme280] init failed at 0x%02X\n", cfg.bme280Addr);
+    bmpReady = bmp.begin((uint8_t)cfg.bme280Addr);
+    if (!bmpReady) {
+      Serial.printf("[bmp280] init failed at 0x%02X\n", cfg.bme280Addr);
     } else {
       // Niedriges Oversampling = schnell, kein Selbstwaerme-Drift bei
-      // forced mode.
-      bme.setSampling(Adafruit_BME280::MODE_FORCED,
-                      Adafruit_BME280::SAMPLING_X1,    // temp
-                      Adafruit_BME280::SAMPLING_X1,    // pressure
-                      Adafruit_BME280::SAMPLING_X1,    // humidity
-                      Adafruit_BME280::FILTER_OFF);
+      // forced mode. BMP280 hat keine Feuchte.
+      bmp.setSampling(Adafruit_BMP280::MODE_FORCED,
+                      Adafruit_BMP280::SAMPLING_X1,    // temp
+                      Adafruit_BMP280::SAMPLING_X1,    // pressure
+                      Adafruit_BMP280::FILTER_OFF);
     }
   }
 
@@ -121,14 +120,13 @@ double readScaleRawAvg(int idx, int samples) {
 }
 
 void readEnv(EnvReading& out, const MainConfig& /*cfg*/) {
-  if (bmeReady) {
-    bme.takeForcedMeasurement();
-    float t = bme.readTemperature();
-    float h = bme.readHumidity();
-    float p = bme.readPressure();
+  if (bmpReady) {
+    bmp.takeForcedMeasurement();
+    float t = bmp.readTemperature();
+    float p = bmp.readPressure();
     if (!isnan(t)) out.tempC    = (double)t;
-    if (!isnan(h)) out.humidity = (double)h;
     if (!isnan(p) && p > 0) out.pressure = (double)p / 100.0; // hPa
+    // BMP280: keine Luftfeuchte.
   }
   if (inaBatReady && inaBat) {
     float v = inaBat->getBusVoltage_V();

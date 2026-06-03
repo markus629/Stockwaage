@@ -55,7 +55,7 @@ jobs:
             "ArduinoJson" \
             "HX711 Arduino Library" \
             "WiFiManager" \
-            "Adafruit BME280 Library" \
+            "Adafruit BMP280 Library" \
             "Adafruit INA219" \
             "Adafruit Unified Sensor"
 
