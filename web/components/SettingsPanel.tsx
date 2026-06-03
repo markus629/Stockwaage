@@ -2,23 +2,11 @@
 
 import { useEffect, useState } from "react";
 import {
-  ALLOWED_I2C_PINS,
-  ALLOWED_RAIN_PINS,
-  ALLOWED_SCK_PINS,
-  ALLOWED_WAKE_PINS,
-  DEFAULT_HX711_SCK,
   BME280_ADDRS,
   DEFAULT_BME280_ADDR,
   DEFAULT_SWARM_DROP_KG,
   DEFAULT_SWARM_WINDOW_MIN,
-  DEFAULT_INA_BATTERY_ADDR,
-  DEFAULT_INA_SOLAR_ADDR,
-  DEFAULT_I2C_SCL,
-  DEFAULT_I2C_SDA,
-  DEFAULT_RAIN_PIN,
-  DEFAULT_WAKE_PIN,
   firmwareBinUrl,
-  INA219_ADDRS,
   isNewerVersion,
   sendCommand,
   updateMainConfig,
@@ -27,7 +15,6 @@ import {
   type Reading,
 } from "@/lib/devices";
 import DebouncedInput from "./DebouncedInput";
-import PinSelect from "./PinSelect";
 import StarToggle from "./StarToggle";
 import { FEED_STEP_THRESHOLD_KG } from "@/lib/analysis";
 
@@ -37,7 +24,6 @@ type Props = {
   mainCfg: MainConfig;
   latest: Reading | null;
   intervalSecFallback?: number;
-  pinOwners: Record<number, string>;
 };
 
 function hex(n: number | undefined): string {
@@ -51,11 +37,7 @@ export default function SettingsPanel({
   mainCfg,
   latest,
   intervalSecFallback,
-  pinOwners,
 }: Props) {
-  const i2cSda = mainCfg.i2cSda ?? DEFAULT_I2C_SDA;
-  const i2cScl = mainCfg.i2cScl ?? DEFAULT_I2C_SCL;
-
   return (
     <div className="space-y-4">
       <Section title="Allgemein">
@@ -104,29 +86,35 @@ export default function SettingsPanel({
         </div>
       </Section>
 
-      <Section
-        title="Waagen-Bus (HX711)"
-        subtitle="Alle Wägezellen teilen sich einen gemeinsamen Clock-Pin (SCK). Die Daten-Pins (DT) stellst du je Waage im Tab „Waagen“ ein."
+      <SensorSection
+        title="Temperatursensor (BMP280)"
+        subtitle="Temperatur für die Gewichts-Kompensation (Luftdruck nebenbei). Der BMP280 hat keine Luftfeuchte."
+        enabled={mainCfg.bme280Enabled ?? false}
+        onEnabledChange={(v) =>
+          updateMainConfig(deviceId, { bme280Enabled: v })
+        }
+        onDashboard={mainCfg.bme280OnDashboard ?? false}
+        onDashboardChange={(v) =>
+          updateMainConfig(deviceId, { bme280OnDashboard: v })
+        }
+        statusLines={[
+          latest?.ambientC !== undefined
+            ? `${latest.ambientC.toFixed(1)} °C`
+            : null,
+          latest?.ambientPressure !== undefined
+            ? `${latest.ambientPressure.toFixed(0)} hPa`
+            : null,
+        ]}
       >
-        <Field label="SCK-Pin (GPIO, gemeinsam)">
-          <PinSelect
-            value={mainCfg.sckPin ?? DEFAULT_HX711_SCK}
-            allowed={ALLOWED_SCK_PINS}
-            onChange={(v) => updateMainConfig(deviceId, { sckPin: v })}
-            pinOwners={pinOwners}
-            ownerKey="HX711 SCK"
-            defaultMarker={DEFAULT_HX711_SCK}
+        <Field label="I2C-Adresse">
+          <AddrSelect
+            value={mainCfg.bme280Addr ?? DEFAULT_BME280_ADDR}
+            allowed={BME280_ADDRS}
+            onChange={(v) => updateMainConfig(deviceId, { bme280Addr: v })}
           />
-          <Hint>
-            Standard GPIO 4. Wirkt beim nächsten ESP-Wakeup (bzw. sofort, wenn
-            Deep Sleep aus ist). Für minimalen Stromverbrauch einen{" "}
-            <strong>RTC-fähigen Pin (GPIO ≤ 21)</strong> wählen: nur dann hält
-            der ESP den HX711 im Deep Sleep zuverlässig im Stromspar-Modus
-            (power_down). Höhere Pins funktionieren, sparen aber im Schlaf
-            weniger Strom.
-          </Hint>
+          <Hint>Standard 0x76; 0x77 wenn SDO am Modul auf VCC liegt.</Hint>
         </Field>
-      </Section>
+      </SensorSection>
 
       <Section
         title="Schwarm-Alarm"
@@ -199,242 +187,6 @@ export default function SettingsPanel({
         device={device}
         mainCfg={mainCfg}
       />
-
-      <Section
-        title="I2C-Bus"
-        subtitle="SDA + SCL für BME280, INA219 (Akku) und INA219 (Solar) – alle teilen sich den Bus."
-      >
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="SDA (GPIO)">
-            <PinSelect
-              value={i2cSda}
-              allowed={ALLOWED_I2C_PINS}
-              onChange={(v) => updateMainConfig(deviceId, { i2cSda: v })}
-              pinOwners={pinOwners}
-              ownerKey="I2C SDA"
-            />
-          </Field>
-          <Field label="SCL (GPIO)">
-            <PinSelect
-              value={i2cScl}
-              allowed={ALLOWED_I2C_PINS}
-              onChange={(v) => updateMainConfig(deviceId, { i2cScl: v })}
-              pinOwners={pinOwners}
-              ownerKey="I2C SCL"
-            />
-          </Field>
-        </div>
-      </Section>
-
-      <SensorSection
-        title="BME280"
-        subtitle="Temperatur, Luftfeuchte, Luftdruck. Ersetzt AM2302."
-        enabled={mainCfg.bme280Enabled ?? false}
-        onEnabledChange={(v) =>
-          updateMainConfig(deviceId, { bme280Enabled: v })
-        }
-        onDashboard={mainCfg.bme280OnDashboard ?? false}
-        onDashboardChange={(v) =>
-          updateMainConfig(deviceId, { bme280OnDashboard: v })
-        }
-        statusLines={[
-          latest?.ambientC !== undefined
-            ? `${latest.ambientC.toFixed(1)} °C`
-            : null,
-          latest?.ambientHumidity !== undefined
-            ? `${latest.ambientHumidity.toFixed(0)} % rF`
-            : null,
-          latest?.ambientPressure !== undefined
-            ? `${latest.ambientPressure.toFixed(0)} hPa`
-            : null,
-        ]}
-      >
-        <Field label="I2C-Adresse">
-          <AddrSelect
-            value={mainCfg.bme280Addr ?? DEFAULT_BME280_ADDR}
-            allowed={BME280_ADDRS}
-            onChange={(v) => updateMainConfig(deviceId, { bme280Addr: v })}
-          />
-          <Hint>
-            Standard 0x76. Wenn SDO (Pin 5 am Modul) auf VCC gezogen ist:
-            0x77.
-          </Hint>
-        </Field>
-      </SensorSection>
-
-      <SensorSection
-        title="INA219 — Akku"
-        subtitle="Misst Akku-Spannung und Lade-/Entladestrom."
-        enabled={mainCfg.inaBatteryEnabled ?? false}
-        onEnabledChange={(v) =>
-          updateMainConfig(deviceId, { inaBatteryEnabled: v })
-        }
-        onDashboard={mainCfg.inaBatteryOnDashboard ?? false}
-        onDashboardChange={(v) =>
-          updateMainConfig(deviceId, { inaBatteryOnDashboard: v })
-        }
-        statusLines={[
-          latest?.batteryV !== undefined
-            ? `${latest.batteryV.toFixed(2)} V`
-            : null,
-          latest?.batteryA !== undefined
-            ? `${(latest.batteryA * 1000).toFixed(0)} mA`
-            : null,
-        ]}
-      >
-        <Field label="I2C-Adresse">
-          <AddrSelect
-            value={mainCfg.inaBatteryAddr ?? DEFAULT_INA_BATTERY_ADDR}
-            allowed={INA219_ADDRS}
-            onChange={(v) =>
-              updateMainConfig(deviceId, { inaBatteryAddr: v })
-            }
-            busy={
-              mainCfg.inaSolarEnabled
-                ? mainCfg.inaSolarAddr ?? DEFAULT_INA_SOLAR_ADDR
-                : undefined
-            }
-          />
-          <Hint>
-            Werks-Standard 0x40 (A0+A1 unbeschaltet). Für mehrere INA219
-            am gleichen Bus jeweils A0/A1 löten:
-            0x40, 0x41, 0x44, 0x45.
-          </Hint>
-        </Field>
-      </SensorSection>
-
-      <SensorSection
-        title="INA219 — Solar"
-        subtitle="Misst Solarpanel-Spannung und Strom. Dient gleichzeitig als Helligkeits-Indikator."
-        enabled={mainCfg.inaSolarEnabled ?? false}
-        onEnabledChange={(v) =>
-          updateMainConfig(deviceId, { inaSolarEnabled: v })
-        }
-        onDashboard={mainCfg.inaSolarOnDashboard ?? false}
-        onDashboardChange={(v) =>
-          updateMainConfig(deviceId, { inaSolarOnDashboard: v })
-        }
-        statusLines={[
-          latest?.solarV !== undefined
-            ? `${latest.solarV.toFixed(2)} V`
-            : null,
-          latest?.solarA !== undefined
-            ? `${(latest.solarA * 1000).toFixed(0)} mA`
-            : null,
-        ]}
-      >
-        <Field label="I2C-Adresse">
-          <AddrSelect
-            value={mainCfg.inaSolarAddr ?? DEFAULT_INA_SOLAR_ADDR}
-            allowed={INA219_ADDRS}
-            onChange={(v) =>
-              updateMainConfig(deviceId, { inaSolarAddr: v })
-            }
-            busy={
-              mainCfg.inaBatteryEnabled
-                ? mainCfg.inaBatteryAddr ?? DEFAULT_INA_BATTERY_ADDR
-                : undefined
-            }
-          />
-          <Hint>
-            Muss sich von der Akku-Adresse unterscheiden. Empfehlung:
-            Akku = 0x40, Solar = 0x41 (A0 auf dem Solar-Modul brücken).
-          </Hint>
-        </Field>
-      </SensorSection>
-
-      <SensorSection
-        title="Regensensor"
-        subtitle="Kapazitiver oder resistiver Streifen, analog gemessen."
-        enabled={mainCfg.rainEnabled ?? false}
-        onEnabledChange={(v) =>
-          updateMainConfig(deviceId, { rainEnabled: v })
-        }
-        onDashboard={mainCfg.rainOnDashboard ?? false}
-        onDashboardChange={(v) =>
-          updateMainConfig(deviceId, { rainOnDashboard: v })
-        }
-        statusLines={[
-          latest?.rainRaw !== undefined
-            ? `Rohwert ${latest.rainRaw}`
-            : null,
-        ]}
-      >
-        <Field label="ADC-Pin (input-only)">
-          <PinSelect
-            value={mainCfg.rainPin ?? DEFAULT_RAIN_PIN}
-            allowed={ALLOWED_RAIN_PINS}
-            onChange={(v) => updateMainConfig(deviceId, { rainPin: v })}
-            pinOwners={pinOwners}
-            ownerKey="Regensensor"
-          />
-          <Hint>
-            Analog-Ausgang (AO) an ADC1 (GPIO 1–10). Skala: trocken ≈ hoch
-            (~4095), je nasser desto niedriger, klatschnass ≈ 0. Sensor mit
-            3,3 V versorgen (nicht 5 V – sonst zu hohe Spannung am ADC).
-          </Hint>
-        </Field>
-      </SensorSection>
-
-      <SensorSection
-        title="Wake-Button"
-        subtitle="Externer Taster. 1× drücken = sofort aufwachen & messen. 2× drücken = Messpause (zum Arbeiten an den Bienen)."
-        enabled={mainCfg.wakeButtonEnabled ?? false}
-        onEnabledChange={(v) =>
-          updateMainConfig(deviceId, { wakeButtonEnabled: v })
-        }
-        statusLines={[]}
-      >
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="GPIO">
-            <PinSelect
-              value={mainCfg.wakeButtonPin ?? DEFAULT_WAKE_PIN}
-              allowed={ALLOWED_WAKE_PINS}
-              onChange={(v) =>
-                updateMainConfig(deviceId, { wakeButtonPin: v })
-              }
-              pinOwners={pinOwners}
-              ownerKey="Wake-Button"
-            />
-          </Field>
-          <Field label="Trigger-Level">
-            <select
-              value={mainCfg.wakeButtonLevel ?? 0}
-              onChange={(e) =>
-                updateMainConfig(deviceId, {
-                  wakeButtonLevel: parseInt(e.target.value, 10),
-                })
-              }
-              className="mt-1 w-full rounded border border-neutral-300 px-2 py-1 text-sm"
-            >
-              <option value={0}>LOW (Taster nach GND, interner Pull-Up)</option>
-              <option value={1}>HIGH (Taster nach 3.3 V, ext. Pull-Down)</option>
-            </select>
-          </Field>
-          <Field label="Messpause bei Doppelklick (Minuten)">
-            <DebouncedInput
-              type="number"
-              min={1}
-              max={1440}
-              value={mainCfg.wakePauseMin ?? 30}
-              onCommit={(raw) => {
-                const v = parseInt(raw, 10);
-                if (!isNaN(v) && v >= 1)
-                  updateMainConfig(deviceId, {
-                    wakePauseMin: Math.min(1440, v),
-                  });
-              }}
-              className="mt-1 w-full rounded border border-neutral-300 px-2 py-1 text-sm"
-            />
-          </Field>
-        </div>
-        <Hint>
-          Bei Doppelklick blinkt die Onboard-LED grün und der ESP pausiert
-          die eingestellte Zeit (kein Wiegen). Ein einzelner Druck während
-          der Pause beendet sie sofort. Wirkt ab dem nächsten Deep-Sleep;
-          Taster gegen GND ist die einfachste Variante.
-        </Hint>
-      </SensorSection>
     </div>
   );
 }

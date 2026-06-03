@@ -336,7 +336,6 @@ function DeviceDetail() {
                 reading={current?.scales?.[sid]}
                 readings={windowReadings}
                 prefs={uiPrefs.get(sid)}
-                pinOwners={pinOwners}
                 comments={comments.filter((c) => c.scaleId === sid)}
                 dailyStats={dailyStats}
                 feedStepThresholdKg={mainCfg.feedStepThresholdKg}
@@ -375,7 +374,6 @@ function DeviceDetail() {
           mainCfg={mainCfg}
           latest={latest}
           intervalSecFallback={device?.intervalSec}
-          pinOwners={pinOwners}
         />
       )}
 

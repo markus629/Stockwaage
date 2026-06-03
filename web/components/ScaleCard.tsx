@@ -2,8 +2,6 @@
 
 import { useState } from "react";
 import {
-  ALLOWED_DT_PINS,
-  DEFAULT_DT_PIN,
   updateScaleConfig,
   type Comment,
   type DailyStat,
@@ -18,7 +16,6 @@ import FeedingPanel from "./FeedingPanel";
 import LiveWeight from "./LiveWeight";
 import DailyChangeChart from "./DailyChangeChart";
 import LearningPhase from "./LearningPhase";
-import PinSelect from "./PinSelect";
 import ScaleChart from "./ScaleChart";
 import ScaleLongTermChart from "./ScaleLongTermChart";
 
@@ -30,7 +27,6 @@ type Props = {
   reading: ScaleReading | undefined;
   readings: Reading[];
   prefs: ScaleUiPrefs;
-  pinOwners: Record<number, string>;
   comments: Comment[];
   dailyStats: DailyStat[];
   feedStepThresholdKg?: number;
@@ -58,8 +54,6 @@ function Chevron({ open }: { open: boolean }) {
 
 function configSummary(cfg: ScaleConfig): string {
   const parts: string[] = [];
-  const pin = cfg.dtPin ?? DEFAULT_DT_PIN[cfg.id];
-  if (pin) parts.push(`Pin ${pin}`);
   if (cfg.scaleFactor && cfg.scaleFactor !== 0) {
     parts.push(`Faktor ${cfg.scaleFactor.toFixed(2)}`);
   } else {
@@ -79,7 +73,6 @@ export default function ScaleCard({
   reading,
   readings,
   prefs,
-  pinOwners,
   comments,
   dailyStats,
   feedStepThresholdKg,
@@ -247,14 +240,6 @@ export default function ScaleCard({
                   {prefs.configTab === "temp" && (
                     <LearningPhase deviceId={deviceId} scale={cfg} />
                   )}
-                  {prefs.configTab === "pin" && (
-                    <PinPanel
-                      deviceId={deviceId}
-                      scaleId={scaleId}
-                      cfg={cfg}
-                      pinOwners={pinOwners}
-                    />
-                  )}
                 </div>
               </div>
             )}
@@ -307,7 +292,6 @@ function Tabs({
   const tabs: { id: ConfigTab; label: string }[] = [
     { id: "calib", label: "Kalibrierung" },
     { id: "temp", label: "Temperatur" },
-    { id: "pin", label: "Pin" },
   ];
   return (
     <div className="flex border-b border-neutral-200 bg-neutral-50">
@@ -364,41 +348,3 @@ function CalibPanel({
   );
 }
 
-function PinPanel({
-  deviceId,
-  scaleId,
-  cfg,
-  pinOwners,
-}: {
-  deviceId: string;
-  scaleId: string;
-  cfg: ScaleConfig;
-  pinOwners: Record<number, string>;
-}) {
-  const currentPin = cfg.dtPin ?? DEFAULT_DT_PIN[scaleId];
-  // SCK-Pin aus der Owner-Map ableiten (in den Einstellungen konfiguriert).
-  const sckPin = Object.entries(pinOwners).find(
-    ([, label]) => label === "HX711 SCK",
-  )?.[0];
-  return (
-    <div className="text-sm">
-      <label className="block">
-        <span className="text-xs text-neutral-500">HX711 DT-Pin (GPIO)</span>
-        <PinSelect
-          value={currentPin}
-          allowed={ALLOWED_DT_PINS}
-          pinOwners={pinOwners}
-          ownerKey={scaleId}
-          defaultMarker={DEFAULT_DT_PIN[scaleId]}
-          onChange={(v) => updateScaleConfig(deviceId, scaleId, { dtPin: v })}
-        />
-      </label>
-      <p className="mt-2 text-xs text-neutral-500">
-        Das ist der Daten-Pin (DT) dieser Waage. Der gemeinsame Clock-Pin
-        (SCK{sckPin ? ` = GPIO ${sckPin}` : ""}) gilt für alle Waagen und wird
-        in den Einstellungen gesetzt. Pin-Änderung wirkt beim nächsten
-        ESP-Wakeup.
-      </p>
-    </div>
-  );
-}

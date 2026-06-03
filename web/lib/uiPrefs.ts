@@ -32,7 +32,7 @@ export function useDeviceTab(
   return [tab, setTab];
 }
 
-export type ConfigTab = "calib" | "temp" | "pin";
+export type ConfigTab = "calib" | "temp";
 
 export type ScaleUiPrefs = {
   cardOpen: boolean;
