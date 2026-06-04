@@ -120,27 +120,12 @@ export default function ScaleCard({
       id={anchorId}
       className="scroll-mt-4 overflow-hidden rounded-lg border border-neutral-200 bg-white"
     >
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={() => onPrefsChange({ cardOpen: !prefs.cardOpen })}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onPrefsChange({ cardOpen: !prefs.cardOpen });
-          }
-        }}
-        className="flex flex-wrap items-center gap-2 px-3 py-2.5 cursor-pointer select-none hover:bg-neutral-50"
-      >
-        <Chevron open={prefs.cardOpen} />
+      <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 px-3 py-2.5">
         <DebouncedInput
           type="text"
           value={cfg.name ?? ""}
           placeholder={scaleId}
-          onClick={(e) => e.stopPropagation()}
-          onCommit={(v) =>
-            updateScaleConfig(deviceId, scaleId, { name: v })
-          }
+          onCommit={(v) => updateScaleConfig(deviceId, scaleId, { name: v })}
           className="min-w-[100px] flex-1 rounded border border-neutral-200 px-2 py-0.5 text-sm"
         />
         <span className="text-xs text-neutral-400">{scaleId}</span>
@@ -153,34 +138,9 @@ export default function ScaleCard({
         </span>
         <button
           type="button"
-          aria-label={
-            cfg.onDashboard ? "Vom Dashboard entfernen" : "Aufs Dashboard"
-          }
-          title={cfg.onDashboard ? "Vom Dashboard entfernen" : "Aufs Dashboard"}
-          onClick={(e) => {
-            e.stopPropagation();
-            updateScaleConfig(deviceId, scaleId, {
-              onDashboard: !cfg.onDashboard,
-            });
-          }}
-          className={`rounded p-1 ${
-            cfg.onDashboard
-              ? "text-amber-500 hover:bg-amber-50"
-              : "text-neutral-300 hover:bg-neutral-100 hover:text-neutral-500"
-          }`}
-        >
-          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M10 1.5l2.6 5.3 5.9.86-4.25 4.14 1 5.85L10 14.77 4.75 17.65l1-5.85L1.5 7.66l5.9-.86L10 1.5z" />
-          </svg>
-        </button>
-        <button
-          type="button"
           aria-label={`Waage ${scaleId} löschen`}
           disabled={deleting}
-          onClick={(e) => {
-            e.stopPropagation();
-            handleDelete();
-          }}
+          onClick={handleDelete}
           className="rounded p-1 text-neutral-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
         >
           {deleting ? (
@@ -209,8 +169,7 @@ export default function ScaleCard({
         </button>
       </div>
 
-      {prefs.cardOpen && (
-        <div className="space-y-3 border-t border-neutral-200 bg-neutral-50/30 p-3">
+      <div className="space-y-3 bg-neutral-50/30 p-3">
           <div className="rounded border border-neutral-200 bg-white">
             <button
               type="button"
@@ -277,7 +236,6 @@ export default function ScaleCard({
             comments={comments}
           />
         </div>
-      )}
     </li>
   );
 }
