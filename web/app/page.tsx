@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import {
   signInWithEmailAndPassword,
   onAuthStateChanged,
@@ -10,9 +9,20 @@ import {
 } from "firebase/auth";
 import { limit, onSnapshot, orderBy, query } from "firebase/firestore";
 import { auth } from "@/lib/firebase";
-import { devicesCol, readingsCol, type Device, type Reading } from "@/lib/devices";
+import {
+  devicesCol,
+  globalConfigDoc,
+  readingsCol,
+  type Device,
+  type MainConfig,
+  type Reading,
+} from "@/lib/devices";
 import OnlineDot from "@/components/OnlineDot";
 import FirmwareFleet from "@/components/FirmwareFleet";
+import SettingsPanel from "@/components/SettingsPanel";
+import ScaleDetailModal from "@/components/ScaleDetailModal";
+
+type Tab = "dashboard" | "settings";
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -21,19 +31,30 @@ export default function Home() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const [latest, setLatest] = useState<Record<string, Reading | null>>({});
+  const [mainCfg, setMainCfg] = useState<MainConfig>({});
+  const [tab, setTab] = useState<Tab>("dashboard");
+  const [selected, setSelected] = useState<string | null>(null);
 
   useEffect(() => onAuthStateChanged(auth, setUser), []);
 
   useEffect(() => {
     if (!user) return;
-    return onSnapshot(devicesCol(), (snap) => {
-      setDevices(
-        snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Device, "id">) })),
-      );
-    });
+    const unsubs = [
+      onSnapshot(devicesCol(), (snap) =>
+        setDevices(
+          snap.docs.map(
+            (d) => ({ id: d.id, ...(d.data() as Omit<Device, "id">) }),
+          ),
+        ),
+      ),
+      onSnapshot(globalConfigDoc(), (s) =>
+        setMainCfg((s.exists() ? s.data() : {}) as MainConfig),
+      ),
+    ];
+    return () => unsubs.forEach((u) => u());
   }, [user]);
 
-  // Letzten Messwert je Gerät live abonnieren (fuer Gewicht/Temp in der Kachel).
+  // Letzten Messwert je Gerät live abonnieren (Gewicht/Temp in der Kachel).
   const ids = devices.map((d) => d.id).sort();
   const idsKey = ids.join(",");
   useEffect(() => {
@@ -97,15 +118,9 @@ export default function Home() {
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-6">
-      <header className="mb-6 flex items-center justify-between">
+      <header className="mb-4 flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Stockwaage</h1>
         <div className="flex items-center gap-3 text-sm">
-          <Link
-            href="/settings"
-            className="rounded border border-neutral-300 px-2 py-1 hover:bg-neutral-100"
-          >
-            ⚙ Einstellungen
-          </Link>
           <span className="hidden text-neutral-500 sm:inline">{user.email}</span>
           <button
             onClick={() => signOut(auth)}
@@ -116,45 +131,95 @@ export default function Home() {
         </div>
       </header>
 
-      <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-neutral-500">
-        Waagen
-      </h2>
-      {devices.length === 0 ? (
-        <p className="text-neutral-500">
-          Noch keine Waage. Starte einen ESP – sobald er sich verbunden hat,
-          erscheint er hier.
-        </p>
-      ) : (
-        <>
+      <nav className="mb-4 flex border-b border-neutral-200">
+        <TopTab active={tab === "dashboard"} onClick={() => setTab("dashboard")}>
+          Dashboard
+        </TopTab>
+        <TopTab active={tab === "settings"} onClick={() => setTab("settings")}>
+          Einstellungen
+        </TopTab>
+      </nav>
+
+      {tab === "dashboard" &&
+        (devices.length === 0 ? (
+          <p className="text-neutral-500">
+            Noch keine Waage. Starte einen ESP – sobald er sich verbunden hat,
+            erscheint er hier.
+          </p>
+        ) : (
           <ul className="grid gap-3 sm:grid-cols-2">
             {devices.map((d) => (
               <li key={d.id}>
-                <DeviceTile device={d} latest={latest[d.id]} />
+                <DeviceTile
+                  device={d}
+                  latest={latest[d.id]}
+                  onClick={() => setSelected(d.id)}
+                />
               </li>
             ))}
           </ul>
+        ))}
+
+      {tab === "settings" && (
+        <div className="space-y-4">
+          <SettingsPanel mainCfg={mainCfg} />
           <FirmwareFleet devices={devices} />
-        </>
+        </div>
+      )}
+
+      {selected && (
+        <ScaleDetailModal
+          deviceId={selected}
+          mainCfg={mainCfg}
+          onClose={() => setSelected(null)}
+        />
       )}
     </main>
+  );
+}
+
+function TopTab({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${
+        active
+          ? "border-neutral-900 text-neutral-900"
+          : "border-transparent text-neutral-500 hover:text-neutral-900"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
 function DeviceTile({
   device,
   latest,
+  onClick,
 }: {
   device: Device;
   latest: Reading | null | undefined;
+  onClick: () => void;
 }) {
   const kg = primaryKg(latest);
   const tempC = latest?.ambientC;
   const vBat = device.vBat ?? latest?.vBat;
 
   return (
-    <Link
-      href={`/device?id=${encodeURIComponent(device.id)}`}
-      className="block rounded-lg border border-neutral-200 bg-white p-4 transition hover:border-neutral-400 hover:bg-neutral-50"
+    <button
+      type="button"
+      onClick={onClick}
+      className="block w-full rounded-lg border border-neutral-200 bg-white p-4 text-left transition hover:border-neutral-400 hover:bg-neutral-50"
     >
       <div className="flex items-baseline justify-between gap-2">
         <span className="font-medium">{device.id}</span>
@@ -169,18 +234,14 @@ function DeviceTile({
       </div>
 
       <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-500">
-        <span>
-          {tempC !== undefined ? `${tempC.toFixed(1)} °C` : "– °C"}
-        </span>
+        <span>{tempC !== undefined ? `${tempC.toFixed(1)} °C` : "– °C"}</span>
         <span>{vBat !== undefined ? `${vBat.toFixed(2)} V` : "– V"}</span>
         {device.intervalSec && <span>Intervall {device.intervalSec}s</span>}
       </div>
-    </Link>
+    </button>
   );
 }
 
-// Gewicht der ersten (kalibrierten) Waage des Geräts – bei 1-ESP-pro-Beute
-// ist das die einzige.
 function primaryKg(r: Reading | null | undefined): number | undefined {
   if (!r?.scales) return undefined;
   for (const k of Object.keys(r.scales).sort()) {
