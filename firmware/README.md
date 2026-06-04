@@ -1,180 +1,129 @@
-# Stockwaage ESP32-S3 Firmware
+# Stockwaage ESP32 Firmware
 
-ESP32-S3-WROOM-1 **N16R8** (16 MB Flash, 8 MB Octal-PSRAM). Wake auf
-Timer oder Taster, misst, sendet an Firestore, schläft. Erst-Setup über
-Captive Portal (WiFiManager). Kalibrierung, Temperaturkompensation,
-Pin-Belegung und Sensor-Aktivierung kommen zur Laufzeit aus Firestore.
-Firmware-Updates per OTA über GitHub Releases.
+**1 ESP = 1 Beute:** ein HX711 (Wägezelle) + ein BMP280 (Temperatur) +
+Akku-Messung. Der ESP wacht per Timer auf, misst, sendet an Firestore und
+schläft wieder. Erst-Setup über Captive Portal (WiFiManager). Kalibrierung
+und Temperaturkompensation kommen zur Laufzeit aus Firestore; die
+Geräte­einstellungen sind **global** (`config/main`). Firmware-Updates per OTA
+über GitHub Releases.
 
-## Hardware
+Entwickelt auf normalem ESP32(-S3); Ziel-Board **Seeed XIAO ESP32-C5**.
+Board-Umschaltung über `BOARD_XIAO_C5` in `config.h` (oder Build-Flag
+`-DBOARD_XIAO_C5=1`).
 
-| Funktion | Pin (Default) | Bemerkung |
+## Hardware (feste Pins, in `config.h`)
+
+| Funktion | ESP32 / -S3 | XIAO ESP32-C5 |
 | --- | --- | --- |
-| HX711 SCK | GPIO 4 | gemeinsam für alle Waagen |
-| HX711 DT 1..8 | 13, 14, 15, 16, 17, 18, 21, 38 | je eine Waage, pro Waage im UI änderbar |
-| I²C SDA / SCL | GPIO 8 / 9 | gemeinsamer Bus für BME280 + beide INA219 |
-| BME280 | I²C 0x76 | Temperatur, Luftfeuchte, Luftdruck |
-| INA219 Akku | I²C 0x40 | Spannung + Strom Akku |
-| INA219 Solar | I²C 0x41 | Spannung + Strom Solarpanel |
-| Regensensor | GPIO 2 (ADC1) | analog, optional |
-| Akku-ADC (Fallback) | GPIO 1 (ADC1) | Spannungsteiler 100k/100k |
-| Wake-Button | GPIO 5 | 1× = messen, 2× = Messpause |
-| BOOT-Taster | GPIO 0 | beim Reset gedrückt halten = Portal erzwingen |
-| Onboard-NeoPixel | GPIO 48 | Status-Feedback (Pause-Bestätigung) |
+| HX711 DT (Daten) | GPIO 13 | GPIO 2 (A1) |
+| HX711 SCK (Clock) | GPIO 4 | GPIO 3 (A2) |
+| I²C SDA (BMP280) | GPIO 8 | GPIO 23 (D4) |
+| I²C SCL (BMP280) | GPIO 9 | GPIO 24 (D5) |
+| Akku-ADC | GPIO 1 | GPIO 1 (A0) |
+| BOOT-Taster (Portal) | GPIO 0 | GPIO 28 |
 
-Reservierte S3-Pins (nicht verwenden): 19/20 (USB), 26–32 (SPI-Flash),
-33–37 (Octal-PSRAM), 43/44 (UART0), Strapping 0/3/45/46.
-
-Build-Defaults in `stockwaage/config.h`, Laufzeit-Werte (Pins, Adressen,
-Aktivierung) kommen aus Firestore und sind im Web-UI einstellbar.
+- **BMP280** auf I²C-Adresse `0x76` (`0x77` falls SDO am Modul auf VCC).
+- **Akku** über Spannungsteiler 100k/100k an den ADC (`VBAT_DIVIDER = 2.0`).
+- **SCK** sollte RTC-/LP-fähig sein (ESP32-S3: GPIO ≤ 21, C5: LP-GPIO), damit
+  der HX711 im Deep Sleep zuverlässig im `power_down` gehalten wird.
+- Pins ggf. an die eigene Verkabelung anpassen.
 
 ## Arduino IDE 2.x einrichten
 
-1. **Boardverwalter:** `esp32 by Espressif Systems` installieren.
-   - Board: **ESP32S3 Dev Module**
-   - Flash Size: **16MB (128Mb)**
-   - PSRAM: **OPI PSRAM**
-   - Partition Scheme: die mitgelieferte `partitions.csv` im
-     Sketch-Ordner wird automatisch verwendet (zwei 3-MB-App-Slots für
-     OTA + FATFS).
-
-2. **Bibliotheken** (Werkzeuge → Bibliotheken verwalten):
+1. **Boardverwalter:** `esp32 by Espressif Systems`.
+   - Normaler ESP: **ESP32S3 Dev Module**, Flash 16MB, PSRAM OPI.
+   - XIAO C5: das passende Seeed-Board wählen + `BOARD_XIAO_C5 1` in
+     `config.h` setzen.
+   - Partition Scheme: die mitgelieferte `partitions.csv` (zwei 3-MB-App-Slots
+     für OTA + FATFS) wird automatisch genutzt.
+2. **Bibliotheken:**
    - `WiFiManager` (tzapu)
    - `HX711 Arduino Library` (Bogdan Necula)
-   - `ArduinoJson` (Benoit Blanchon, v7)
-   - `Adafruit BME280 Library` (+ `Adafruit Unified Sensor`)
-   - `Adafruit INA219`
-   - `Adafruit NeoPixel`
-
-3. **Sketch öffnen:** `firmware/stockwaage/stockwaage.ino`. Die weiteren
-   Dateien (`config.h`, `firebase.*`, `sensors.*`, `runtime_config.*`,
-   `commands.*`, `updater.*`, `daily_stats.*`) lädt die IDE als Tabs.
-
-4. **Upload** per USB (CH340C/UART) oder die fertigen `.bin` aus einem
-   GitHub Release flashen (siehe unten).
+   - `ArduinoJson` (Benoit Blanchon)
+   - `Adafruit BMP280 Library` (+ `Adafruit Unified Sensor`)
+3. **Sketch:** `firmware/stockwaage/stockwaage.ino` öffnen; die übrigen Tabs
+   (`config.h`, `firebase.*`, `sensors.*`, `runtime_config.*`, `commands.*`,
+   `updater.*`, `daily_stats.*`) lädt die IDE mit.
 
 ## Build & Release (CI)
 
-Bei jedem Push, der `firmware/` ändert, baut die GitHub Action
-`firmware-release.yml` mit `arduino-cli` und veröffentlicht ein Release
-`v0.1.<build-nr>` mit drei Artefakten. Der Versions-String wird per
-`-DFIRMWARE_VERSION=...` aus dem Tag gesetzt (lokale IDE-Builds zeigen
-`dev`).
+Push, der `firmware/` ändert → GitHub Action `firmware-release.yml` baut mit
+`arduino-cli` (ESP32-S3) und veröffentlicht ein Release `v0.1.<build-nr>` mit
+`bootloader.bin`, `partitions.bin`, `stockwaage-<version>.bin`. Der
+Versions-String kommt aus einem generierten `fw_version.h` (lokale Builds ohne
+diese Datei zeigen `dev`).
 
-Erst-Flash / Recovery per Kabel (Web-Flasher oder esptool):
-- `bootloader.bin` → `0x0`
-- `partitions.bin` → `0x8000`
-- `stockwaage-<version>.bin` → `0x10000`
-
-## OTA-Update
-
-Der ESP prüft bei jedem Wakeup das neueste GitHub Release und schreibt
-`firmwareVersion` / `latestFirmwareVersion` in sein Geräte-Dokument. Im
-UI (Einstellungen → Firmware):
-- **Manuell:** Button „Firmware vX installieren" → `update`-Command.
-- **Automatisch:** Checkbox „automatisch installieren". Der ESP zieht
-  neue Releases dann selbstständig (auch ohne geöffnetes UI).
+**Erst-Flash / Recovery** per Kabel (Web-Flasher oder esptool):
+`bootloader.bin`→`0x0`, `partitions.bin`→`0x8000`,
+`stockwaage-<version>.bin`→`0x10000`.
 
 ## Erstinbetriebnahme
 
-1. ESP einschalten → WLAN-AP `stockwaage-setup`
-2. Handy/Laptop verbinden → Captive Portal öffnet sich
-3. *Configure WiFi* → Heim-WLAN + Passwort
-4. Custom-Felder:
-   - **Firebase Passwort** (markus@strogg.de)
-   - **Device ID** (z.B. `bienenstand-garten`)
-   - **Intervall (Sek.)** Default 900 (= 15 min)
-5. *Save* → ESP verbindet, schreibt erste Messung.
+1. ESP einschalten → WLAN-AP `stockwaage-setup`.
+2. Verbinden → Captive Portal → *Configure WiFi*.
+3. Custom-Felder: **Firebase-Passwort**, **Device-ID** (pro ESP eindeutig,
+   z. B. `beute-01`), **Intervall (Sek.)** (Default 900).
+4. *Save* → ESP verbindet und schreibt die erste Messung.
 
-**Portal später erzwingen:** BOOT-Taster (GPIO 0) beim Reset/Wakeup
-gedrückt halten – Portal kommt wieder, vorhandene Werte sind vorausgefüllt.
+**Portal später erzwingen:** BOOT-Taster beim Reset/Wakeup gedrückt halten.
 
-## Wake-Button
+## OTA-Update
 
-- **1× drücken:** ESP wacht sofort auf, misst und sendet.
-- **2× drücken (Doppelklick):** Messpause für `wakePauseMin` Minuten
-  (kein Wiegen, zum Arbeiten an den Bienen). Onboard-LED blinkt grün als
-  Bestätigung. Ein einzelner Druck während der Pause beendet sie sofort.
+Der ESP prüft ~1×/Tag das neueste GitHub Release und schreibt
+`firmwareVersion` / `latestFirmwareVersion` in sein Geräte-Dokument. Im UI
+(Einstellungen → Firmware-Liste): „aktualisieren" je ESP oder „Alle
+aktualisieren". Mit `autoUpdateEnabled` (global) zieht jeder ESP neue
+Releases selbst.
 
-Der Doppelklick wird vor dem WiFi-Connect erkannt; dafür werden die
-Wake-Settings bei jedem Config-Load in NVS gecacht.
+## Deep Sleep & Wachbetrieb
+
+- **Deep Sleep an** (global, Default): messen → schlafen bis Intervall. Vor
+  dem Schlafen `power_down` von HX711 (+ SCK-Pin-Hold).
+- **Deep Sleep aus:** der ESP bleibt wach, übernimmt Einstellungen/Updates
+  sofort, schreibt alle ~5 s das Live-Gewicht (`live/current`) und misst
+  weiter im Intervall. Praktisch zum Kalibrieren/Testen.
 
 ## Datenmodell (Firestore)
 
 ```
-users/{ownerUid}/devices/{deviceId}
-  deviceId, lastSeen, vBat, intervalSec
-  firmwareVersion, latestFirmwareVersion, latestFirmwareUrl
-
-  config/main
-    intervalSec, stayAwakeUntilMs
-    i2cSda, i2cScl
-    bme280Enabled, bme280Addr
-    inaBatteryEnabled, inaBatteryAddr
-    inaSolarEnabled, inaSolarAddr
-    rainEnabled, rainPin
-    wakeButtonEnabled, wakeButtonPin, wakeButtonLevel, wakePauseMin
-    autoUpdateEnabled
-
-  scales/{s1..s8}
-    enabled, name, offset, scaleFactor, tempCoef, tempRefC,
-    dtPin, onDashboard
-
-  readings/{ts}
-    ts, vBat, boots
-    ambientC, ambientHumidity, ambientPressure
-    batteryV, batteryA, solarV, solarA, rainRaw
-    scales: { s1: { raw, kg? }, ... }
-
-  dailyStats/{YYYY-MM-DD}            # Tages-Aggregate für Langzeit-Graph
-    date
-    scales: { s1: { sum, count, min, max, last }, ... }
-    tempC:    { sum, count, min, max, last }
-    humidity: { sum, count, min, max, last }
-
-  comments/{id}                     # Logbuch
-    scaleId, text, ts, createdAt
-
-  commands/{cmdId}
-    type:    "tare" | "calibrate" | "setTempCoef" | "stayAwake"
-             | "reload" | "update"
-    scaleId: "s1" .. "s8"   (wo zutreffend)
-    payload: { knownKg?, tempCoef?, tempRefC?, durationMs?, url?, version? }
-    status:  "pending" | "done" | "error"
-    error?:  String
-    createdAt, processedAt?
+users/{ownerUid}/
+  config/main                         # GLOBAL: intervalSec, deepSleepEnabled,
+                                      #         autoUpdateEnabled, feedStepThresholdKg
+  devices/{deviceId}
+    (Dokument)  deviceId, lastSeen, vBat, intervalSec,
+                firmwareVersion, latestFirmwareVersion, latestFirmwareUrl
+    scales/s1   name, offset, scaleFactor, tempCoef, tempRefC   (+ UI: learning, feed*)
+    readings/{ts}   ts, vBat, ambientC, scales:{ s1:{ raw, kg? } }, expireAt
+    dailyStats/{YYYY-MM-DD}   date, scales:{ s1:{sum,count,min,max,last} }, tempC:{…}
+    live/current    ts, vBat, scales:{ s1:{ raw, kg? } }   (nur im Wachbetrieb)
+    comments/{id}   scaleId, text, ts, createdAt
+    commands/{id}   type, scaleId?, payload, status, …
 ```
 
 ## Kalibrierungs-Mathematik
 
 ```
-ambientC    = BME280-Temperatur
-raw         = HX711.read_average(5)
-kg          = (raw - offset - tempCoef * (ambientC - tempRefC)) / scaleFactor
+ambientC = BMP280-Temperatur
+raw      = HX711.read_average(5)
+kg       = (raw - offset - tempComp) / scaleFactor
+tempComp = (tempCoef != 0 && tempC bekannt) ? tempCoef * (ambientC - tempRefC) : 0
 ```
 
-- `offset`      = Tare (raw bei 0 kg)
-- `scaleFactor` = (raw_belastet − offset) / known_kg
-- `tempCoef`    = Steigung aus Linearregression der Lernphase
-- `tempRefC`    = Mittlere Temperatur während der Lernphase
+- `offset` = Tare (raw bei 0 kg), `scaleFactor` = (raw_belastet − offset)/known_kg
+- `tempCoef`/`tempRefC` = Steigung & Mitteltemperatur aus der Lernphase
+- `kg` nur wenn `scaleFactor != 0`; **raw wird immer geschrieben**
+  (Re-Kalibrierung jederzeit möglich).
 
-`kg` wird nur geschrieben wenn `scaleFactor != 0` und `ambientC` bekannt.
-Der Rohwert wird **immer** geschrieben → spätere Re-Kalibrierung jederzeit
-möglich.
+## Commands
 
-## Command-Lifecycle
-
-Der ESP arbeitet pending commands bei jedem Wakeup **vor** der Messung ab.
-Das UI schreibt `{type, scaleId?, payload, status:"pending", createdAt}`,
-der ESP liefert `status:"done"|"error"` zurück.
-
-Für interaktive Kalibrierung: command `stayAwake` mit `durationMs` → ESP
-bleibt wach und pollt alle 3 s auf weitere commands. Der `update`-command
-trägt die Release-URL im `payload.url` und löst das OTA-Flashen aus.
+Der ESP arbeitet pending `commands` bei jedem Wakeup **vor** der Messung ab
+(`tare`, `calibrate`, `setTempCoef`, `stayAwake`, `reload`, `update`). Das UI
+schreibt `status:"pending"`, der ESP liefert `done`/`error` zurück.
+`stayAwake` hält den ESP für `durationMs` wach (Kalibrier-Wizard);
+`update` trägt die Release-URL im `payload.url`.
 
 ## Tages-Aggregate
 
 Bei jedem Wakeup pflegt der ESP `dailyStats/{YYYY-MM-DD}` per
-Read-modify-write fort (sum/count/min/max/last je Waage + Temperatur/
-Feuchte). Der Tages-Key nutzt lokale Zeit (TZ Europe). So liest der
-Langzeit-Graph nur ein Dokument pro Tag.
+Read-modify-write fort (sum/count/min/max/last je Waage + Temperatur,
+lokaler Tages-Key). So liest der Langzeit-Graph nur ein Dokument pro Tag.
