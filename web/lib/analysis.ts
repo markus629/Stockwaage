@@ -1,65 +1,9 @@
-import { linearRegression, type DailyStat, type Reading } from "./devices";
+import { linearRegression, type DailyStat } from "./devices";
 
 // ============================================================================
-// Ereignis-Erkennung & Prognosen – rein clientseitig aus vorhandenen Daten.
-// Kein Server, kein zusaetzlicher Firestore-Read.
+// Futter-Prognose – rein clientseitig aus vorhandenen Daten (dailyStats).
 // ============================================================================
 
-// ----- Schwarm-Erkennung ----------------------------------------------------
-
-// Ploetzlicher Gewichtssturz = Schwarm abgegangen. Standardschwellen (in den
-// Einstellungen ueberschreibbar): > 1,5 kg Verlust innerhalb von 30 Minuten.
-export const SWARM_DROP_KG = 1.5;
-export const SWARM_WINDOW_MIN = 30;
-export const SWARM_WINDOW_MS = SWARM_WINDOW_MIN * 60 * 1000;
-
-export type SwarmResult = {
-  swarm: boolean;
-  dropKg: number; // groesster Sturz im betrachteten Zeitraum (kg, positiv)
-  atTs?: number; // Zeitpunkt des Sturzes
-  samples: number; // Anzahl auswertbarer kg-Messpunkte
-};
-
-// Sucht im (beliebig sortierten) Messwert-Array einer Waage nach dem
-// groessten Gewichtsabfall innerhalb des Zeitfensters. Schwellen sind
-// parametrisierbar (kommen aus den Geraete-Einstellungen).
-export function detectSwarm(
-  readings: Reading[],
-  scaleId: string,
-  dropKg: number = SWARM_DROP_KG,
-  windowMs: number = SWARM_WINDOW_MS,
-): SwarmResult {
-  const pts = readings
-    .map((r) => ({ ts: r.ts, kg: r.scales?.[scaleId]?.kg }))
-    .filter((p): p is { ts: number; kg: number } =>
-      typeof p.kg === "number" && isFinite(p.kg),
-    )
-    .sort((a, b) => a.ts - b.ts);
-
-  let worst = 0;
-  let atTs: number | undefined;
-  let head = 0;
-  let maxInWindow = -Infinity;
-  for (let i = 0; i < pts.length; i++) {
-    // Fenster vorne beschneiden (alles aelter als windowMs vor pts[i]).
-    while (pts[head].ts < pts[i].ts - windowMs) {
-      head++;
-      // Maximum im Fenster ggf. neu bestimmen, wenn der Spitzenwert rausfiel.
-      maxInWindow = -Infinity;
-      for (let j = head; j <= i; j++) {
-        if (pts[j].kg > maxInWindow) maxInWindow = pts[j].kg;
-      }
-    }
-    if (pts[i].kg > maxInWindow) maxInWindow = pts[i].kg;
-    const drop = maxInWindow - pts[i].kg;
-    if (drop > worst) {
-      worst = drop;
-      atTs = pts[i].ts;
-    }
-  }
-
-  return { swarm: worst >= dropKg, dropKg: worst, atTs, samples: pts.length };
-}
 
 // ----- Futter-Reichweite ----------------------------------------------------
 //

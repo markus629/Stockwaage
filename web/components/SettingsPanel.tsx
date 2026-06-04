@@ -1,8 +1,6 @@
 "use client";
 
 import {
-  DEFAULT_SWARM_DROP_KG,
-  DEFAULT_SWARM_WINDOW_MIN,
   updateGlobalConfig,
   type MainConfig,
 } from "@/lib/devices";
@@ -78,45 +76,6 @@ export default function SettingsPanel({ mainCfg }: Props) {
               {(mainCfg.deepSleepEnabled ?? true)
                 ? "Wirkt ab nächstem ESP-Wakeup."
                 : "Wirkt sofort (Deep Sleep ist aus)."}
-            </Hint>
-          </Field>
-        </div>
-      </Section>
-
-      <Section
-        title="Schwarm-Alarm"
-        subtitle="Wann gilt ein Gewichtssturz als möglicher Schwarm? Wird im Dashboard ausgewertet (rein clientseitig)."
-      >
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Gewichtssturz (kg)">
-            <DebouncedInput
-              type="number"
-              min={0.1}
-              step={0.1}
-              value={mainCfg.swarmDropKg ?? DEFAULT_SWARM_DROP_KG}
-              onCommit={(raw) => {
-                const v = parseFloat(raw.replace(",", "."));
-                if (!isNaN(v) && v > 0) updateGlobalConfig({ swarmDropKg: v });
-              }}
-              className="mt-1 w-full rounded border border-neutral-300 px-2 py-1"
-            />
-            <Hint>Standard 1,5 kg. Größerer Wert = weniger Fehlalarme.</Hint>
-          </Field>
-          <Field label="Zeitfenster (Minuten)">
-            <DebouncedInput
-              type="number"
-              min={5}
-              step={5}
-              value={mainCfg.swarmWindowMin ?? DEFAULT_SWARM_WINDOW_MIN}
-              onCommit={(raw) => {
-                const v = parseInt(raw, 10);
-                if (!isNaN(v) && v >= 1)
-                  updateGlobalConfig({ swarmWindowMin: v });
-              }}
-              className="mt-1 w-full rounded border border-neutral-300 px-2 py-1"
-            />
-            <Hint>
-              Standard 30 min. Der Sturz muss innerhalb dieser Zeit passieren.
             </Hint>
           </Field>
         </div>

@@ -6,17 +6,9 @@ struct MainConfig;  // forward decl, voller Typ in runtime_config.h
 
 namespace sensors {
 
-// Sammeltyp fuer Umgebungs-/Versorgungs-Sensoren. NAN / -1 = nicht
-// gemessen (Sensor disabled oder Fehler).
+// Umgebungssensor: nur Temperatur (BMP280). NAN = nicht gemessen.
 struct EnvReading {
-  double tempC    = NAN;
-  double humidity = NAN;
-  double pressure = NAN;
-  double batteryV = NAN;
-  double batteryA = NAN;
-  double solarV   = NAN;
-  double solarA   = NAN;
-  int    rainRaw  = -1;
+  double tempC = NAN;
 };
 
 // Einmal beim Boot (ADC-Resolution etc.).

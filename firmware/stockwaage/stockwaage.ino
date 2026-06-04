@@ -164,19 +164,11 @@ bool measureAndUpload() {
   JsonObject fields = out.createNestedObject("fields");
   fb::writeInteger(fields, "ts",    (long long)tsMs);
   fb::writeNumber (fields, "vBat",  vBat);
-  fb::writeInteger(fields, "boots", bootCount);
   // TTL-Marker: Firestore loescht das Reading nach READINGS_TTL_DAYS (Policy
   // auf "expireAt"). Langzeitdaten leben in dailyStats und bleiben.
   fb::writeTimestamp(fields, "expireAt",
                      (time_t)(tsMs / 1000ULL) + (time_t)READINGS_TTL_DAYS * 86400);
-  if (!isnan(env.tempC))    fb::writeNumber(fields, "ambientC",        env.tempC);
-  if (!isnan(env.humidity)) fb::writeNumber(fields, "ambientHumidity", env.humidity);
-  if (!isnan(env.pressure)) fb::writeNumber(fields, "ambientPressure", env.pressure);
-  if (!isnan(env.batteryV)) fb::writeNumber(fields, "batteryV",        env.batteryV);
-  if (!isnan(env.batteryA)) fb::writeNumber(fields, "batteryA",        env.batteryA);
-  if (!isnan(env.solarV))   fb::writeNumber(fields, "solarV",          env.solarV);
-  if (!isnan(env.solarA))   fb::writeNumber(fields, "solarA",          env.solarA);
-  if (env.rainRaw >= 0)     fb::writeInteger(fields, "rainRaw",        env.rainRaw);
+  if (!isnan(env.tempC)) fb::writeNumber(fields, "ambientC", env.tempC);
 
   // ambientC fuer die Waagen-Temperaturkompensation.
   const double ambientC = env.tempC;

@@ -20,7 +20,6 @@ import ScaleChart from "./ScaleChart";
 import ScaleLongTermChart from "./ScaleLongTermChart";
 
 type Props = {
-  anchorId?: string;
   deviceId: string;
   scaleId: string;
   cfg: ScaleConfig;
@@ -66,7 +65,6 @@ function configSummary(cfg: ScaleConfig): string {
 }
 
 export default function ScaleCard({
-  anchorId,
   deviceId,
   scaleId,
   cfg,
@@ -116,10 +114,7 @@ export default function ScaleCard({
   }
 
   return (
-    <li
-      id={anchorId}
-      className="scroll-mt-4 overflow-hidden rounded-lg border border-neutral-200 bg-white"
-    >
+    <li className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
       <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 px-3 py-2.5">
         <DebouncedInput
           type="text"

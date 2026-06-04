@@ -90,8 +90,6 @@ void update(const String& idToken, const String& deviceId,
 
   emitMetric(fields, "tempC",
              ef["tempC"]["mapValue"]["fields"], env.tempC);
-  emitMetric(fields, "humidity",
-             ef["humidity"]["mapValue"]["fields"], env.humidity);
 
   String body;
   serializeJson(out, body);

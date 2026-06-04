@@ -2,39 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-export type DeviceTab = "scales" | "settings";
-
-const DEVICE_TAB_KEY_PREFIX = "stockwaage.tab.";
-
-export function useDeviceTab(
-  deviceId: string,
-): [DeviceTab, (t: DeviceTab) => void] {
-  const [tab, setTab] = useState<DeviceTab>("scales");
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    if (!deviceId || typeof window === "undefined") return;
-    try {
-      const raw = window.localStorage.getItem(DEVICE_TAB_KEY_PREFIX + deviceId);
-      if (raw === "scales" || raw === "settings") setTab(raw as DeviceTab);
-    } catch {}
-    setHydrated(true);
-  }, [deviceId]);
-
-  useEffect(() => {
-    if (!hydrated || !deviceId || typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(DEVICE_TAB_KEY_PREFIX + deviceId, tab);
-    } catch {}
-  }, [hydrated, deviceId, tab]);
-
-  return [tab, setTab];
-}
-
 export type ConfigTab = "calib" | "temp";
 
 export type ScaleUiPrefs = {
-  cardOpen: boolean;
   configOpen: boolean;
   configTab: ConfigTab;
   stackDays: number; // 24h-Stapel: Anzahl uebereinandergelegter Tage
@@ -44,7 +14,6 @@ export type ScaleUiPrefs = {
 export const STACK_DAY_STEPS = [1, 2, 3, 5, 7, 10, 14, 21] as const;
 
 export const DEFAULT_SCALE_PREFS: ScaleUiPrefs = {
-  cardOpen: true,
   configOpen: false,
   configTab: "calib",
   stackDays: 7,
