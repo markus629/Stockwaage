@@ -218,6 +218,8 @@ bool measureAndUpload() {
   fb::writeNumber (hbf, "vBat",            vBat);
   fb::writeInteger(hbf, "intervalSec",     cfg.main.intervalSec);
   fb::writeString (hbf, "firmwareVersion", FIRMWARE_VERSION);
+  fb::writeString (hbf, "boardType",       BOARD_KIND);
+  fb::writeInteger(hbf, "maxScales",       NUM_SCALES);
   if (latest.ok) {
     fb::writeString(hbf, "latestFirmwareVersion", latest.version);
     fb::writeString(hbf, "latestFirmwareUrl",     latest.binUrl);
@@ -228,8 +230,8 @@ bool measureAndUpload() {
     idToken, String("users/") + OWNER_UID + "/devices/" + deviceId,
     hbBody,
     latest.ok
-      ? "lastSeen,deviceId,vBat,intervalSec,firmwareVersion,latestFirmwareVersion,latestFirmwareUrl"
-      : "lastSeen,deviceId,vBat,intervalSec,firmwareVersion");
+      ? "lastSeen,deviceId,vBat,intervalSec,firmwareVersion,boardType,maxScales,latestFirmwareVersion,latestFirmwareUrl"
+      : "lastSeen,deviceId,vBat,intervalSec,firmwareVersion,boardType,maxScales");
 
   return true;
 }

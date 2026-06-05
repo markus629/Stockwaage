@@ -28,6 +28,9 @@ export type Device = {
   firmwareVersion?: string;
   latestFirmwareVersion?: string;
   latestFirmwareUrl?: string;
+  // Variante: "s3" = Bienenstand (mehrere Waagen), "c5" = eine Waage.
+  boardType?: string;
+  maxScales?: number;
 };
 
 // Globale Einstellungen (gelten fuer alle ESPs).
@@ -110,11 +113,11 @@ export type Comment = {
   createdAt: number;
 };
 
-// Download-URL der App-Binary eines Releases. Deterministisch aus der Version
-// (CI nennt das Asset immer "stockwaage-<tag>.bin"). Wird im Update-Befehl
-// mitgeschickt, damit der ESP gezielt die App laedt (nicht bootloader.bin).
-export const firmwareBinUrl = (version: string) =>
-  `https://github.com/markus629/Stockwaage/releases/download/${version}/stockwaage-${version}.bin`;
+// Download-URL der App-Binary eines Releases, passend zur Variante des Geraets.
+// CI nennt die Assets "stockwaage-<boardType>-<tag>.bin" (s3 / c5). Wird im
+// Update-Befehl mitgeschickt, damit der ESP gezielt die richtige App laedt.
+export const firmwareBinUrl = (version: string, boardType: string) =>
+  `https://github.com/markus629/Stockwaage/releases/download/${version}/stockwaage-${boardType}-${version}.bin`;
 
 // Vergleicht Semver-Strings (mit fuehrendem 'v' optional). "dev" gilt als
 // aelter -> Updates immer erlaubt. Identisch zur Firmware-Logik.

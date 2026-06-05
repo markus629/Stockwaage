@@ -31,26 +31,30 @@ export default function FirmwareFleet({ devices }: { devices: Device[] }) {
     .sort((a, b) => a.d.id.localeCompare(b.d.id));
   const anyUpdate = rows.some((r) => r.updateAvailable && !ordered[r.d.id]);
 
-  async function update(id: string) {
-    if (!latestFw) return;
-    setBusy((b) => ({ ...b, [id]: true }));
+  async function update(d: Device) {
+    if (!latestFw || !d.boardType) return;
+    setBusy((b) => ({ ...b, [d.id]: true }));
     setError(null);
     try {
-      await sendCommand(id, {
+      await sendCommand(d.id, {
         type: "update",
-        payload: { url: firmwareBinUrl(latestFw), version: latestFw },
+        payload: {
+          url: firmwareBinUrl(latestFw, d.boardType),
+          version: latestFw,
+        },
       });
-      setOrdered((x) => ({ ...x, [id]: true }));
+      setOrdered((x) => ({ ...x, [d.id]: true }));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setBusy((b) => ({ ...b, [id]: false }));
+      setBusy((b) => ({ ...b, [d.id]: false }));
     }
   }
 
   async function updateAll() {
     for (const r of rows) {
-      if (r.updateAvailable && !ordered[r.d.id]) await update(r.d.id);
+      if (r.updateAvailable && !ordered[r.d.id] && r.d.boardType)
+        await update(r.d);
     }
   }
 
@@ -76,8 +80,9 @@ export default function FirmwareFleet({ devices }: { devices: Device[] }) {
             ) : updateAvailable ? (
               <button
                 type="button"
-                onClick={() => update(d.id)}
-                disabled={busy[d.id]}
+                onClick={() => update(d)}
+                disabled={busy[d.id] || !d.boardType}
+                title={d.boardType ? undefined : "Geräte-Typ noch unbekannt"}
                 className="rounded bg-neutral-900 px-2 py-0.5 text-xs text-white hover:bg-neutral-700 disabled:opacity-50"
               >
                 {busy[d.id] ? "…" : "aktualisieren"}

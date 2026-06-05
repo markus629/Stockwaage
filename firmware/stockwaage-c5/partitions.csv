@@ -1,0 +1,8 @@
+# OTA-faehiges Layout fuer XIAO ESP32-C5 (4 MB Flash):
+# zwei 1.7-MB-App-Slots (rotierend fuer sichere OTA) + ~700 KB FATFS.
+# Name,    Type, SubType, Offset,   Size,
+nvs,       data, nvs,     0x9000,   0x5000,
+otadata,   data, ota,     0xe000,   0x2000,
+app0,      app,  ota_0,   0x10000,  0x1A0000,
+app1,      app,  ota_1,   0x1B0000, 0x1A0000,
+ffat,      data, fat,     0x350000, 0xB0000,

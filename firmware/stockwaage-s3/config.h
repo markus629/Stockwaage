@@ -32,6 +32,12 @@
 // GitHub-Release-Check nur 1x/Tag (sonst 96 Calls/Tag -> Rate-Limit + Strom).
 #define UPDATE_CHECK_INTERVAL_SEC  86400
 
+// ----- Variante (S3 = mehrere Waagen / Bienenstand) -------------------------
+// Im Heartbeat gemeldet, damit das UI den Typ kennt. OTA waehlt das passende
+// Release-Asset ueber FW_ASSET_PREFIX.
+#define BOARD_KIND        "s3"
+#define FW_ASSET_PREFIX   "stockwaage-s3"
+
 // ----- Datenhaltung ---------------------------------------------------------
 // Rohmesswerte (readings) bekommen ein expireAt-Feld; eine Firestore-TTL-
 // Policy auf dieses Feld loescht sie automatisch nach Ablauf. Langzeitdaten
@@ -39,44 +45,32 @@
 // TTL-Policy einmalig einrichten (siehe README).
 #define READINGS_TTL_DAYS  60
 
-// ----- Hardware Pin-Belegung --------------------------------------------------
-// 1 ESP = 1 Beute: ein HX711 + ein BMP280 + Akku-Spannung. Feste Pins.
-//
-// Board waehlen: 1 = Seeed XIAO ESP32-C5, 0 = normaler ESP32 / ESP32-S3
-// Dev-Board. Laesst sich auch per Build-Flag setzen (-DBOARD_XIAO_C5=1),
-// ohne diese Datei zu aendern. Die CI baut weiterhin das S3-Profil (=0).
-#ifndef BOARD_XIAO_C5
-#define BOARD_XIAO_C5       0
-#endif
+// ----- Hardware Pin-Belegung (ESP32-S3-WROOM-1 N16R8) -----------------------
+// Reserviert vom Chip/Modul: 19,20 (USB), 26-32 (SPI Flash), 33-37 (Octal
+// PSRAM), 43,44 (UART0). Strapping: 0,3,45,46. Onboard NeoPixel: 48.
+// HX711: alle teilen sich SCK, jeder hat eigenen DT
+#define PIN_HX711_SCK       4
 
-#define NUM_SCALES          1     // genau eine Waage pro ESP
+#define NUM_SCALES          8
+static const int PIN_HX711_DT[NUM_SCALES] = {
+  13, 14, 15, 16, 17, 18, 21, 38
+};
 
-#if BOARD_XIAO_C5
-  // ----- Seeed XIAO ESP32-C5 -------------------------------------------------
-  // Pinbeschriftung laut Seeed-Pinout (GPIO-Nummern). Bei Bedarf an deine
-  // Verkabelung anpassen.
-  #define PIN_HX711_DT       2     // A1  (Daten)
-  #define PIN_HX711_SCK      3     // A2  (Clock; LP-faehig -> Power-Down-Hold)
-  #define PIN_I2C_SDA        23    // D4 / SDA
-  #define PIN_I2C_SCL        24    // D5 / SCL
-  #define PIN_VBAT_ADC       1     // A0  (Akku ueber Spannungsteiler)
-  #define PIN_PORTAL_FORCE   28    // BOOT-Taster
-#else
-  // ----- ESP32 / ESP32-S3 Dev-Board ------------------------------------------
-  #define PIN_HX711_DT       13    // Daten
-  #define PIN_HX711_SCK      4     // Clock (RTC-faehig <=21 -> Power-Down-Hold)
-  #define PIN_I2C_SDA        8
-  #define PIN_I2C_SCL        9
-  #define PIN_VBAT_ADC       1     // ADC1 (Akku ueber Spannungsteiler)
-  #define PIN_PORTAL_FORCE   0     // BOOT-Taster
-#endif
-
-#define BMP280_ADDR         0x76  // 0x77 wenn SDO am Modul auf VCC
+// Umgebungssensoren (BME280, INA219x2, Regen) kommen ueber I2C bzw.
+// frei waehlbare Pins - Konfiguration liegt in Firestore (mainConfig).
 
 // Akku-Spannung messen (Spannungsteiler 100k/100k empfohlen)
+// ADC1 auf S3 = GPIO 1-10, kein WiFi-Konflikt
+#define PIN_VBAT_ADC        1
 #define VBAT_DIVIDER        2.0f      // Faktor wegen Spannungsteiler
 #define VBAT_ADC_REF        3.3f
 #define VBAT_ADC_MAX        4095.0f
+
+// BOOT-Taster zum Forcieren des Captive Portals (waehrend Aufwachen halten)
+#define PIN_PORTAL_FORCE    0
+
+// Onboard-NeoPixel (WS2812) fuer Status-Feedback
+#define PIN_NEOPIXEL        48
 
 // ----- Default-Werte (vom User ueberschreibbar) -----------------------------
 #define DEFAULT_DEVICE_ID         "esp-01"

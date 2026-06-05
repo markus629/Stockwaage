@@ -1,8 +1,9 @@
 name: Firmware Release
 
-# Baut bei jedem Push, der firmware/ aendert, automatisch eine neue
-# Binary und veroeffentlicht sie als GitHub-Release v0.1.<build-nummer>.
-# ESPs mit aktiviertem Auto-Update ziehen sie beim naechsten Wakeup.
+# Baut bei jedem Push, der firmware/ aendert, BEIDE Varianten (S3 = mehrere
+# Waagen, C5 = eine Waage) und veroeffentlicht sie als GitHub-Release
+# v0.1.<build-nummer>. Jeder ESP zieht per OTA das zu seinem Typ passende
+# Asset (stockwaage-s3-* bzw. stockwaage-c5-*).
 on:
   push:
     branches: [main]
@@ -12,9 +13,6 @@ on:
       - ".github/workflows/firmware-release.yml"
   workflow_dispatch:
 
-# Node 20 wird auf den Runnern abgekuendigt. checkout laeuft ueber v5 auf
-# Node 24; fuer die uebrigen JS-Actions (cache, action-gh-release,
-# setup-arduino-cli) opten wir per Flag in den Node-24-Modus.
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -56,32 +54,54 @@ jobs:
             "HX711 Arduino Library" \
             "WiFiManager" \
             "Adafruit BMP280 Library" \
+            "Adafruit INA219" \
+            "Adafruit NeoPixel" \
             "Adafruit Unified Sensor"
 
-      - name: Generate version header
-        # Robust statt -D'…="…"' (arduino-cli verschluckt die inneren Quotes,
-        # dann faellt FIRMWARE_VERSION auf "dev" zurueck). config.h zieht den
-        # Wert via __has_include aus dieser Datei.
+      - name: Generate version headers
         run: |
-          printf '#define FIRMWARE_VERSION "%s"\n' \
-            "${{ steps.ver.outputs.version }}" \
-            > firmware/stockwaage/fw_version.h
-          cat firmware/stockwaage/fw_version.h
+          for v in s3 c5; do
+            printf '#define FIRMWARE_VERSION "%s"\n' \
+              "${{ steps.ver.outputs.version }}" \
+              > firmware/stockwaage-$v/fw_version.h
+          done
 
-      - name: Compile
+      - name: Compile S3 (mehrere Waagen)
         run: |
-          mkdir -p build
+          mkdir -p build-s3
           arduino-cli compile \
             --fqbn "esp32:esp32:esp32s3:PSRAM=opi,FlashSize=16M,PartitionScheme=custom" \
-            --output-dir build \
-            firmware/stockwaage
+            --output-dir build-s3 \
+            firmware/stockwaage-s3
+
+      - name: Compile C5 (eine Waage)
+        id: c5
+        continue-on-error: true
+        run: |
+          mkdir -p build-c5
+          arduino-cli compile \
+            --fqbn "esp32:esp32:esp32c5:FlashSize=4M,PartitionScheme=custom" \
+            --build-property "compiler.cpp.extra_flags=-DBOARD_XIAO_C5=1" \
+            --output-dir build-c5 \
+            firmware/stockwaage-c5
 
       - name: Stage release artifacts
         run: |
           mkdir -p release
-          cp build/stockwaage.ino.bin            release/stockwaage-${{ steps.ver.outputs.version }}.bin
-          cp build/stockwaage.ino.bootloader.bin release/bootloader.bin
-          cp build/stockwaage.ino.partitions.bin release/partitions.bin
+          V=${{ steps.ver.outputs.version }}
+          # S3 (muss vorhanden sein)
+          cp build-s3/stockwaage-s3.ino.bin            release/stockwaage-s3-$V.bin
+          cp build-s3/stockwaage-s3.ino.bootloader.bin release/bootloader-s3.bin
+          cp build-s3/stockwaage-s3.ino.partitions.bin release/partitions-s3.bin
+          # C5 (best effort – nur wenn Compile geklappt hat)
+          if [ -f build-c5/stockwaage-c5.ino.bin ]; then
+            cp build-c5/stockwaage-c5.ino.bin            release/stockwaage-c5-$V.bin
+            cp build-c5/stockwaage-c5.ino.bootloader.bin release/bootloader-c5.bin
+            cp build-c5/stockwaage-c5.ino.partitions.bin release/partitions-c5.bin
+          else
+            echo "::warning::C5-Build fehlgeschlagen oder C5-Core fehlt – nur S3 im Release."
+          fi
+          ls -l release
 
       - name: Create release
         uses: softprops/action-gh-release@v2
@@ -89,21 +109,15 @@ jobs:
           tag_name: ${{ steps.ver.outputs.version }}
           name: ${{ steps.ver.outputs.version }}
           generate_release_notes: true
-          files: |
-            release/stockwaage-${{ steps.ver.outputs.version }}.bin
-            release/bootloader.bin
-            release/partitions.bin
+          files: release/*
           body: |
             Automatischer Build von Commit ${{ github.sha }}.
 
-            ## OTA-Update
-            Wird im Web-UI unter **Einstellungen → Firmware** als
-            ${{ steps.ver.outputs.version }} angeboten (bzw. automatisch
-            installiert, wenn Auto-Update aktiv ist).
+            Zwei Varianten:
+            - **S3** (Bienenstand, mehrere Waagen): `stockwaage-s3-${{ steps.ver.outputs.version }}.bin`
+              + `bootloader-s3.bin` (`0x0`) + `partitions-s3.bin` (`0x8000`), App → `0x10000`.
+            - **C5** (eine Waage): `stockwaage-c5-${{ steps.ver.outputs.version }}.bin`
+              + `bootloader-c5.bin` (`0x0`) + `partitions-c5.bin` (`0x8000`), App → `0x10000`.
 
-            ## Erst-Flash (oder Recovery)
-            Drei Dateien mit folgenden Adressen flashen
-            (esptool.py oder Web-Flasher):
-            - `bootloader.bin` → `0x0`
-            - `partitions.bin` → `0x8000`
-            - `stockwaage-${{ steps.ver.outputs.version }}.bin` → `0x10000`
+            Im Web-UI (Einstellungen → Firmware) zieht jeder ESP automatisch das
+            zu seinem Typ passende Asset.
