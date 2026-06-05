@@ -12,6 +12,7 @@ import { auth } from "@/lib/firebase";
 import {
   devicesCol,
   globalConfigDoc,
+  isHiveDevice,
   readingsCol,
   type Device,
   type MainConfig,
@@ -21,6 +22,7 @@ import OnlineDot from "@/components/OnlineDot";
 import FirmwareFleet from "@/components/FirmwareFleet";
 import SettingsPanel from "@/components/SettingsPanel";
 import ScaleDetailModal from "@/components/ScaleDetailModal";
+import HiveDetailModal from "@/components/HiveDetailModal";
 
 type Tab = "dashboard" | "settings";
 
@@ -72,6 +74,15 @@ export default function Home() {
     return () => unsubs.forEach((u) => u());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, idsKey]);
+
+  const selectedDevice = selected
+    ? devices.find((d) => d.id === selected) ?? { id: selected }
+    : null;
+  // Fallback fuer Altgeraete ohne boardType: Waagen-Zahl aus dem letzten
+  // Reading (>1 Waage => Bienenstand/S3).
+  const hiveScaleCount = selected
+    ? Object.keys(latest[selected]?.scales ?? {}).length
+    : 0;
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -153,6 +164,10 @@ export default function Home() {
                 <DeviceTile
                   device={d}
                   latest={latest[d.id]}
+                  isHive={isHiveDevice(
+                    d,
+                    Object.keys(latest[d.id]?.scales ?? {}).length,
+                  )}
                   onClick={() => setSelected(d.id)}
                 />
               </li>
@@ -167,13 +182,20 @@ export default function Home() {
         </div>
       )}
 
-      {selected && (
-        <ScaleDetailModal
-          deviceId={selected}
-          mainCfg={mainCfg}
-          onClose={() => setSelected(null)}
-        />
-      )}
+      {selectedDevice &&
+        (isHiveDevice(selectedDevice, hiveScaleCount) ? (
+          <HiveDetailModal
+            deviceId={selectedDevice.id}
+            mainCfg={mainCfg}
+            onClose={() => setSelected(null)}
+          />
+        ) : (
+          <ScaleDetailModal
+            deviceId={selectedDevice.id}
+            mainCfg={mainCfg}
+            onClose={() => setSelected(null)}
+          />
+        ))}
     </main>
   );
 }
@@ -205,15 +227,19 @@ function TopTab({
 function DeviceTile({
   device,
   latest,
+  isHive,
   onClick,
 }: {
   device: Device;
   latest: Reading | null | undefined;
+  isHive: boolean;
   onClick: () => void;
 }) {
-  const kg = primaryKg(latest);
   const tempC = latest?.ambientC;
   const vBat = device.vBat ?? latest?.vBat;
+  const scaleCount = Object.keys(latest?.scales ?? {}).length;
+  // C5 zeigt das Gewicht der einen Waage; ein S3-Bienenstand die Summe.
+  const kg = isHive ? sumKg(latest) : primaryKg(latest);
 
   return (
     <button
@@ -222,15 +248,29 @@ function DeviceTile({
       className="block w-full rounded-lg border border-neutral-200 bg-white p-4 text-left transition hover:border-neutral-400 hover:bg-neutral-50"
     >
       <div className="flex items-baseline justify-between gap-2">
-        <span className="font-medium">{device.id}</span>
+        <span className="font-medium">
+          {isHive && <span className="mr-1">🐝</span>}
+          {device.id}
+        </span>
         <span className="text-xs text-neutral-500">
           {device.lastSeen ? formatAgo(device.lastSeen) : "—"}
           <OnlineDot lastSeen={device.lastSeen} intervalSec={device.intervalSec} />
         </span>
       </div>
 
+      {isHive && (
+        <div className="mt-0.5 text-xs text-neutral-500">
+          Bienenstand · {scaleCount} {scaleCount === 1 ? "Waage" : "Waagen"}
+        </div>
+      )}
+
       <div className="mt-2 font-mono text-2xl font-semibold tabular-nums">
         {kg !== undefined ? `${kg.toFixed(2)} kg` : "—"}
+        {isHive && kg !== undefined && (
+          <span className="ml-1 text-xs font-normal text-neutral-400">
+            gesamt
+          </span>
+        )}
       </div>
 
       <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-500">
@@ -249,6 +289,20 @@ function primaryKg(r: Reading | null | undefined): number | undefined {
     if (typeof kg === "number" && isFinite(kg)) return kg;
   }
   return undefined;
+}
+
+function sumKg(r: Reading | null | undefined): number | undefined {
+  if (!r?.scales) return undefined;
+  let sum = 0;
+  let any = false;
+  for (const k of Object.keys(r.scales)) {
+    const kg = r.scales[k]?.kg;
+    if (typeof kg === "number" && isFinite(kg)) {
+      sum += kg;
+      any = true;
+    }
+  }
+  return any ? sum : undefined;
 }
 
 function formatAgo(tsMs: number): string {

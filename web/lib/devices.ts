@@ -33,7 +33,9 @@ export type Device = {
   maxScales?: number;
 };
 
-// Globale Einstellungen (gelten fuer alle ESPs).
+// Config-Dokument (config/main). Fuer C5 global (users/{uid}/config/main),
+// fuer S3 pro Geraet (users/{uid}/devices/{id}/config/main). Die Hardware-
+// Felder (Pins/Sensoren) sind nur fuer den S3-Bienenstand relevant.
 export type MainConfig = {
   intervalSec?: number;
   stayAwakeUntilMs?: number;
@@ -42,11 +44,38 @@ export type MainConfig = {
   autoUpdateEnabled?: boolean;
   // Futter-Tracker: Tagesaenderungen > diesem Wert gelten als Eingriff.
   feedStepThresholdKg?: number;
+  // ---- S3-Bienenstand: Hardware (pro Geraet konfigurierbar) ----
+  // Gemeinsamer HX711-Clock-Pin (alle Waagen teilen sich SCK). Default 4.
+  sckPin?: number;
+  // I2C-Bus (geteilt von BMP280 + INA219)
+  i2cSda?: number;
+  i2cScl?: number;
+  // BMP280 (Temp/Druck) – Feldname historisch "bme280*"
+  bme280Enabled?: boolean;
+  bme280Addr?: number;
+  // INA219 fuer Akku-Strom/Spannung
+  inaBatteryEnabled?: boolean;
+  inaBatteryAddr?: number;
+  // INA219 fuer Solar-Strom/Spannung
+  inaSolarEnabled?: boolean;
+  inaSolarAddr?: number;
+  // Regensensor (analog)
+  rainEnabled?: boolean;
+  rainPin?: number;
+  // Wake-Button weckt den ESP aus Deep-Sleep ueber einen externen Taster.
+  // wakeButtonLevel 0 -> Taster nach GND, 1 -> nach 3.3V.
+  wakeButtonEnabled?: boolean;
+  wakeButtonPin?: number;
+  wakeButtonLevel?: number;
+  wakePauseMin?: number;
 };
 
 export type ScaleConfig = {
-  id: string; // "s1"
+  id: string; // "s1".."s8"
   name?: string;
+  // S3-Bienenstand: Waage aktiv + individueller HX711-DT-Pin.
+  enabled?: boolean;
+  dtPin?: number;
   offset?: number;
   scaleFactor?: number;
   tempCoef?: number;
@@ -65,6 +94,13 @@ export type Reading = {
   ts: number;
   vBat?: number;
   ambientC?: number;
+  // Nur S3-Bienenstand (BMP280 / INA219 x2 / Regensensor).
+  ambientPressure?: number;
+  batteryV?: number;
+  batteryA?: number;
+  solarV?: number;
+  solarA?: number;
+  rainRaw?: number;
   scales: Record<string, ScaleReading>;
 };
 
@@ -143,6 +179,10 @@ export const deviceDoc = (id: string) => doc(db, ...devicePath(id));
 // GLOBALE Config (gilt fuer alle ESPs): users/{uid}/config/main.
 export const globalConfigDoc = () =>
   doc(db, "users", ownerUid, "config", "main");
+// PRO-GERAET Config: users/{uid}/devices/{id}/config/main. Der S3 liest seine
+// Hardware/Sensor-Einstellungen von hier (die globale gilt nur fuer C5).
+export const deviceConfigDoc = (id: string) =>
+  doc(db, ...devicePath(id), "config", "main");
 export const scaleDoc = (id: string, scaleId: string) =>
   doc(db, ...devicePath(id), "scales", scaleId);
 export const scalesCol = (id: string) =>
@@ -224,6 +264,113 @@ export async function updateGlobalConfig(
   patch: Partial<MainConfig>,
 ): Promise<void> {
   await setDoc(globalConfigDoc(), patch, { merge: true });
+}
+
+// Pro-Geraet-Config (S3-Bienenstand: Pins/Sensoren/Verhalten).
+export async function updateDeviceConfig(
+  deviceId: string,
+  patch: Partial<MainConfig>,
+): Promise<void> {
+  await setDoc(deviceConfigDoc(deviceId), patch, { merge: true });
+}
+
+// ----- S3-Bienenstand: Geraete-Typ + Pin-Belegung ---------------------------
+
+// Variante erkennen: neue Firmware meldet boardType/maxScales im Heartbeat.
+// Fallback fuer Altgeraete ohne Meldung: > 1 angelegte Waage = Bienenstand.
+export function isHiveDevice(d: Device, scaleCount = 0): boolean {
+  if (d.boardType === "s3") return true;
+  if (d.boardType === "c5") return false;
+  if (typeof d.maxScales === "number") return d.maxScales > 1;
+  return scaleCount > 1;
+}
+
+export const MAX_SCALES = 8;
+export const SCALE_SLOTS = Array.from(
+  { length: MAX_SCALES },
+  (_, i) => `s${i + 1}`,
+);
+
+// Sichere GPIOs auf dem ESP32-S3-WROOM-1 N16R8. Vermieden: VBat (1),
+// Strapping (0,3,45,46), USB (19,20), UART0 (43,44), SPI-Flash (26-32),
+// Octal-PSRAM (33-37), LED (48). GPIO 4 ist dabei (SCK ist konfigurierbar).
+export const ALLOWED_DT_PINS = [
+  4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 21, 38, 39, 40, 41, 42,
+  47,
+] as const;
+export const DEFAULT_HX711_SCK = 4;
+export const ALLOWED_SCK_PINS: readonly number[] = ALLOWED_DT_PINS;
+// Default-Pinbelegung pro Slot, identisch zur S3-Firmware (config.h).
+export const DEFAULT_DT_PIN: Record<string, number> = {
+  s1: 13, s2: 14, s3: 15, s4: 16, s5: 17, s6: 18, s7: 21, s8: 38,
+};
+export const DEFAULT_I2C_SDA = 8;
+export const DEFAULT_I2C_SCL = 9;
+export const ALLOWED_I2C_PINS = [
+  5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 21, 38, 39, 40, 41, 42, 47,
+] as const;
+export const BME280_ADDRS = [0x76, 0x77] as const;
+export const INA219_ADDRS = [0x40, 0x41, 0x44, 0x45] as const;
+export const ALLOWED_RAIN_PINS = [2, 5, 6, 7, 8, 9, 10] as const;
+export const DEFAULT_RAIN_PIN = 2;
+export const ALLOWED_WAKE_PINS = [
+  5, 6, 7, 10, 11, 12, 13, 14, 15, 16, 17, 18, 21,
+] as const;
+export const DEFAULT_WAKE_PIN = 5;
+export const DEFAULT_BME280_ADDR = 0x76;
+export const DEFAULT_INA_BATTERY_ADDR = 0x40;
+export const DEFAULT_INA_SOLAR_ADDR = 0x41;
+
+// Naechsten freien Slot anlegen (mit freiem DT-Pin) -> Slot-Id oder null.
+export async function addScale(
+  deviceId: string,
+  existingIds: Iterable<string>,
+  pinOwners: Record<number, string>,
+): Promise<string | null> {
+  const taken = new Set(existingIds);
+  const nextSlot = SCALE_SLOTS.find((s) => !taken.has(s));
+  if (!nextSlot) return null;
+  const preferred = DEFAULT_DT_PIN[nextSlot];
+  const pin =
+    preferred && !pinOwners[preferred]
+      ? preferred
+      : ALLOWED_DT_PINS.find((p) => !pinOwners[p]);
+  if (!pin) return null;
+  await setDoc(scaleDoc(deviceId, nextSlot), { enabled: true, dtPin: pin });
+  return nextSlot;
+}
+
+// Sammelt alle in der Config belegten GPIO-Pins inkl. System-Pins. Pro Pin der
+// Owner-Label fuer die UI-Anzeige ("belegt von …").
+export function computePinOwners(
+  scales: Record<string, ScaleConfig>,
+  scaleIds: string[],
+  mainCfg: MainConfig,
+): Record<number, string> {
+  const map: Record<number, string> = { 0: "Portal-Button", 1: "VBat ADC" };
+  const sck = mainCfg.sckPin ?? DEFAULT_HX711_SCK;
+  if (typeof sck === "number" && sck > 0 && map[sck] === undefined) {
+    map[sck] = "HX711 SCK";
+  }
+  for (const sid of scaleIds) {
+    const pin = scales[sid]?.dtPin ?? DEFAULT_DT_PIN[sid];
+    if (typeof pin === "number" && pin > 0 && map[pin] === undefined) {
+      map[pin] = sid;
+    }
+  }
+  const sda = mainCfg.i2cSda ?? DEFAULT_I2C_SDA;
+  const scl = mainCfg.i2cScl ?? DEFAULT_I2C_SCL;
+  if (map[sda] === undefined) map[sda] = "I2C SDA";
+  if (map[scl] === undefined) map[scl] = "I2C SCL";
+  if (mainCfg.rainEnabled) {
+    const rp = mainCfg.rainPin ?? DEFAULT_RAIN_PIN;
+    if (map[rp] === undefined) map[rp] = "Regensensor";
+  }
+  if (mainCfg.wakeButtonEnabled) {
+    const wp = mainCfg.wakeButtonPin ?? DEFAULT_WAKE_PIN;
+    if (map[wp] === undefined) map[wp] = "Wake-Button";
+  }
+  return map;
 }
 
 // Firestore-Batch-Limit ist 500 Ops; etwas Reserve lassen.
