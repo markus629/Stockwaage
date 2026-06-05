@@ -67,7 +67,10 @@ void enterDeepSleep(uint32_t seconds) {
     gpio_num_t sck = (gpio_num_t)PIN_HX711_SCK;
     if (rtc_gpio_is_valid_gpio(sck)) {
       gpio_hold_en(sck);
+      // Globales Deep-Sleep-Hold: auf dem ESP32-C5 (noch) nicht im Core.
+#if !BOARD_XIAO_C5
       gpio_deep_sleep_hold_en();
+#endif
       rtcHeldSckPin = (int)sck;
     }
   }
@@ -376,7 +379,9 @@ void setup() {
 
   // Falls vor dem Deep Sleep der SCK-Pin gehalten wurde (HX711 power_down):
   // Hold wieder loesen, sonst laesst sich der Pin nicht neu konfigurieren.
+#if !BOARD_XIAO_C5
   gpio_deep_sleep_hold_dis();
+#endif
   if (rtcHeldSckPin >= 0) {
     gpio_hold_dis((gpio_num_t)rtcHeldSckPin);
     rtcHeldSckPin = -1;

@@ -191,6 +191,18 @@ export default function HiveDetailModal({
         </div>
 
         <div className="space-y-3">
+          {mainCfg.bme280Enabled !== true && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              <span className="font-semibold">
+                ⚠️ Temperatursensor (BMP280) ist deaktiviert
+              </span>
+              <span className="mt-0.5 block text-xs text-amber-800">
+                Alle Waagen dieses Bienenstands werden über einen gemeinsamen
+                BMP280 temperatur-kompensiert. Ohne ihn ist kein zuverlässiges
+                Wiegen möglich – im Einstellungen-Tab aktivieren.
+              </span>
+            </div>
+          )}
           <p className="text-xs text-neutral-500">
             Hardware/Sensoren (BMP280, INA219, Regen, Wake-Button, SCK/I2C)
             gelten für alle S3 gemeinsam und stehen unter{" "}

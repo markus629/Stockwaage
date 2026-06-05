@@ -75,8 +75,6 @@ jobs:
             firmware/stockwaage-s3
 
       - name: Compile C5 (eine Waage)
-        id: c5
-        continue-on-error: true
         run: |
           mkdir -p build-c5
           arduino-cli compile \
@@ -89,18 +87,13 @@ jobs:
         run: |
           mkdir -p release
           V=${{ steps.ver.outputs.version }}
-          # S3 (muss vorhanden sein)
+          # Beide Varianten muessen vorhanden sein (set -e bricht sonst ab).
           cp build-s3/stockwaage-s3.ino.bin            release/stockwaage-s3-$V.bin
           cp build-s3/stockwaage-s3.ino.bootloader.bin release/bootloader-s3.bin
           cp build-s3/stockwaage-s3.ino.partitions.bin release/partitions-s3.bin
-          # C5 (best effort – nur wenn Compile geklappt hat)
-          if [ -f build-c5/stockwaage-c5.ino.bin ]; then
-            cp build-c5/stockwaage-c5.ino.bin            release/stockwaage-c5-$V.bin
-            cp build-c5/stockwaage-c5.ino.bootloader.bin release/bootloader-c5.bin
-            cp build-c5/stockwaage-c5.ino.partitions.bin release/partitions-c5.bin
-          else
-            echo "::warning::C5-Build fehlgeschlagen oder C5-Core fehlt – nur S3 im Release."
-          fi
+          cp build-c5/stockwaage-c5.ino.bin            release/stockwaage-c5-$V.bin
+          cp build-c5/stockwaage-c5.ino.bootloader.bin release/bootloader-c5.bin
+          cp build-c5/stockwaage-c5.ino.partitions.bin release/partitions-c5.bin
           ls -l release
 
       - name: Create release

@@ -84,6 +84,14 @@ export default function Home() {
     ? Object.keys(latest[selected]?.scales ?? {}).length
     : 0;
 
+  // Ein S3-Bienenstand braucht den (gemeinsamen) BMP280 fuer die Temperatur-
+  // Kompensation aller Waagen. Ist er global deaktiviert, ist kein gescheites
+  // Wiegen moeglich -> Warnung, sobald ueberhaupt ein S3 vorhanden ist.
+  const anyHive = devices.some((d) =>
+    isHiveDevice(d, Object.keys(latest[d.id]?.scales ?? {}).length),
+  );
+  const tempSensorMissing = anyHive && mainCfg.bme280Enabled !== true;
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoginError(null);
@@ -158,8 +166,26 @@ export default function Home() {
             erscheint er hier.
           </p>
         ) : (
-          <ul className="grid gap-3 sm:grid-cols-2">
-            {devices.map((d) => (
+          <>
+            {tempSensorMissing && (
+              <button
+                type="button"
+                onClick={() => setTab("settings")}
+                className="mb-3 block w-full rounded-lg border border-amber-300 bg-amber-50 p-3 text-left text-sm text-amber-900 hover:bg-amber-100"
+              >
+                <span className="font-semibold">
+                  ⚠️ Temperatursensor (BMP280) ist deaktiviert
+                </span>
+                <span className="mt-0.5 block text-xs text-amber-800">
+                  Der Bienenstand misst die Temperatur für alle Waagen über
+                  einen gemeinsamen BMP280. Ohne ihn ist keine
+                  Temperatur-Kompensation und damit kein zuverlässiges Wiegen
+                  möglich. Jetzt unter Einstellungen aktivieren.
+                </span>
+              </button>
+            )}
+            <ul className="grid gap-3 sm:grid-cols-2">
+              {devices.map((d) => (
               <li key={d.id}>
                 <DeviceTile
                   device={d}
@@ -171,8 +197,9 @@ export default function Home() {
                   onClick={() => setSelected(d.id)}
                 />
               </li>
-            ))}
-          </ul>
+              ))}
+            </ul>
+          </>
         ))}
 
       {tab === "settings" && (
