@@ -16,7 +16,6 @@ import {
   commentsCol,
   computePinOwners,
   dailyStatsCol,
-  deviceConfigDoc,
   deviceDoc,
   liveDoc,
   readingsCol,
@@ -31,7 +30,6 @@ import {
   type ScaleConfig,
 } from "@/lib/devices";
 import CalibrationWizard from "./CalibrationWizard";
-import HiveSettings from "./HiveSettings";
 import OnlineDot from "./OnlineDot";
 import PinSelect from "./PinSelect";
 import ScaleCard from "./ScaleCard";
@@ -39,11 +37,10 @@ import { useScaleUiPrefs } from "@/lib/uiPrefs";
 
 const DEFAULT_STACK_DAYS = 7;
 
-type Tab = "scales" | "settings";
-
 // Floating-Window eines S3-Bienenstands: mehrere Waagen (je eine ScaleCard mit
-// Graphen + individuellem DT-Pin) und die geraetespezifischen Hardware-/Sensor-
-// Einstellungen. Globale Werte (Schwarm/Futter) kommen via mainCfg.
+// Graphen + individuellem HX711-DT-Pin), Waagen per +/- hinzufuegen/entfernen.
+// Hardware/Sensoren + Verhalten sind global (Einstellungen-Tab); hier kommen
+// die globalen Werte (inkl. SCK fuer Pin-Kollisionen) via mainCfg.
 export default function HiveDetailModal({
   deviceId,
   mainCfg,
@@ -54,7 +51,6 @@ export default function HiveDetailModal({
   onClose: () => void;
 }) {
   const [device, setDevice] = useState<Device | null>(null);
-  const [deviceCfg, setDeviceCfg] = useState<MainConfig>({});
   const [scales, setScales] = useState<Record<string, ScaleConfig>>({});
   const [latest, setLatest] = useState<Reading | null>(null);
   const [live, setLive] = useState<Reading | null>(null);
@@ -64,7 +60,6 @@ export default function HiveDetailModal({
   const [dailyStats, setDailyStats] = useState<DailyStat[]>([]);
   const [dailyLoaded, setDailyLoaded] = useState(false);
   const [wizardFor, setWizardFor] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("scales");
   const [adding, setAdding] = useState(false);
   const uiPrefs = useScaleUiPrefs(deviceId);
 
@@ -72,9 +67,6 @@ export default function HiveDetailModal({
     const unsubs: Array<() => void> = [
       onSnapshot(deviceDoc(deviceId), (s) =>
         setDevice(s.exists() ? ({ id: s.id, ...s.data() } as Device) : null),
-      ),
-      onSnapshot(deviceConfigDoc(deviceId), (s) =>
-        setDeviceCfg((s.exists() ? s.data() : {}) as MainConfig),
       ),
       onSnapshot(scalesCol(deviceId), (snap) => {
         const map: Record<string, ScaleConfig> = {};
@@ -102,8 +94,8 @@ export default function HiveDetailModal({
     [scales],
   );
   const pinOwners = useMemo(
-    () => computePinOwners(scales, scaleIds, deviceCfg),
-    [scales, scaleIds, deviceCfg],
+    () => computePinOwners(scales, scaleIds, mainCfg),
+    [scales, scaleIds, mainCfg],
   );
   const current = useMemo<Reading | null>(
     () =>
@@ -118,7 +110,7 @@ export default function HiveDetailModal({
     : DEFAULT_STACK_DAYS;
 
   useEffect(() => {
-    if (tab !== "scales" || maxStackDays <= loadedRawDays) return;
+    if (maxStackDays <= loadedRawDays) return;
     let cancelled = false;
     const start = new Date();
     start.setHours(0, 0, 0, 0);
@@ -133,10 +125,10 @@ export default function HiveDetailModal({
     return () => {
       cancelled = true;
     };
-  }, [deviceId, tab, maxStackDays, loadedRawDays]);
+  }, [deviceId, maxStackDays, loadedRawDays]);
 
   useEffect(() => {
-    if (tab !== "scales" || dailyLoaded) return;
+    if (dailyLoaded) return;
     let cancelled = false;
     getDocs(query(dailyStatsCol(deviceId), orderBy("date", "asc"))).then(
       (snap) => {
@@ -148,7 +140,7 @@ export default function HiveDetailModal({
     return () => {
       cancelled = true;
     };
-  }, [deviceId, tab, dailyLoaded]);
+  }, [deviceId, dailyLoaded]);
 
   async function handleAddScale() {
     setAdding(true);
@@ -159,7 +151,7 @@ export default function HiveDetailModal({
     }
   }
 
-  const deepSleep = deviceCfg.deepSleepEnabled ?? true;
+  const deepSleep = mainCfg.deepSleepEnabled ?? true;
 
   return (
     <div
@@ -198,17 +190,13 @@ export default function HiveDetailModal({
           </button>
         </div>
 
-        <nav className="mb-4 flex border-b border-neutral-200">
-          <Tab active={tab === "scales"} onClick={() => setTab("scales")}>
-            Waagen
-          </Tab>
-          <Tab active={tab === "settings"} onClick={() => setTab("settings")}>
-            Einstellungen
-          </Tab>
-        </nav>
-
-        {tab === "scales" ? (
-          <div className="space-y-3">
+        <div className="space-y-3">
+          <p className="text-xs text-neutral-500">
+            Hardware/Sensoren (BMP280, INA219, Regen, Wake-Button, SCK/I2C)
+            gelten für alle S3 gemeinsam und stehen unter{" "}
+            <strong>Einstellungen</strong>. Hier legst du nur fest, wie viele
+            Waagen dieser Bienenstand hat und welcher DT-Pin zu welcher gehört.
+          </p>
             {scaleIds.length === 0 && (
               <p className="text-sm text-neutral-500">
                 Noch keine Waage angelegt. Füge unten eine hinzu und wähle ihren
@@ -267,25 +255,36 @@ export default function HiveDetailModal({
               })}
             </ul>
 
-            {scaleIds.length < 8 && (
+            <div className="flex gap-2">
               <button
                 type="button"
                 onClick={handleAddScale}
-                disabled={adding}
-                className="w-full rounded border border-dashed border-neutral-300 px-3 py-2 text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
+                disabled={adding || scaleIds.length >= 8}
+                className="flex-1 rounded border border-dashed border-neutral-300 px-3 py-2 text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
               >
-                {adding ? "…" : "+ Waage hinzufügen"}
+                {adding ? "…" : "+ Waage"}
               </button>
-            )}
-          </div>
-        ) : (
-          <HiveSettings
-            deviceId={deviceId}
-            cfg={deviceCfg}
-            latest={current}
-            pinOwners={pinOwners}
-          />
-        )}
+              <button
+                type="button"
+                onClick={async () => {
+                  const last = scaleIds[scaleIds.length - 1];
+                  if (!last) return;
+                  if (
+                    !confirm(
+                      `Letzte Waage (${scales[last]?.name || last}) entfernen? ` +
+                        `Kalibrierung und Messwerte dieser Waage werden gelöscht.`,
+                    )
+                  )
+                    return;
+                  await removeScale(deviceId, last);
+                }}
+                disabled={scaleIds.length === 0}
+                className="flex-1 rounded border border-dashed border-neutral-300 px-3 py-2 text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
+              >
+                − Letzte Waage
+              </button>
+            </div>
+        </div>
 
         {wizardFor && (
           <CalibrationWizard
@@ -298,29 +297,5 @@ export default function HiveDetailModal({
         )}
       </div>
     </div>
-  );
-}
-
-function Tab({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${
-        active
-          ? "border-neutral-900 text-neutral-900"
-          : "border-transparent text-neutral-500 hover:text-neutral-900"
-      }`}
-    >
-      {children}
-    </button>
   );
 }

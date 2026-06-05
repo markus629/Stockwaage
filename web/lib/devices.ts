@@ -33,9 +33,9 @@ export type Device = {
   maxScales?: number;
 };
 
-// Config-Dokument (config/main). Fuer C5 global (users/{uid}/config/main),
-// fuer S3 pro Geraet (users/{uid}/devices/{id}/config/main). Die Hardware-
-// Felder (Pins/Sensoren) sind nur fuer den S3-Bienenstand relevant.
+// Globales Config-Dokument (users/{uid}/config/main) – gilt fuer ALLE ESPs
+// (S3 wie C5). Die Hardware-Felder (Pins/Sensoren) gelten fuer alle S3
+// gemeinsam (alle gleich aufgebaut); die C5 ignoriert sie.
 export type MainConfig = {
   intervalSec?: number;
   stayAwakeUntilMs?: number;
@@ -176,13 +176,10 @@ export const devicePath = (deviceId: string) =>
 
 export const devicesCol = () => collection(db, "users", ownerUid, "devices");
 export const deviceDoc = (id: string) => doc(db, ...devicePath(id));
-// GLOBALE Config (gilt fuer alle ESPs): users/{uid}/config/main.
+// GLOBALE Config fuer ALLE ESPs (S3 wie C5): users/{uid}/config/main. Enthaelt
+// Verhalten + die (fuer alle S3 gleiche) Hardware/Sensor-Konfiguration.
 export const globalConfigDoc = () =>
   doc(db, "users", ownerUid, "config", "main");
-// PRO-GERAET Config: users/{uid}/devices/{id}/config/main. Der S3 liest seine
-// Hardware/Sensor-Einstellungen von hier (die globale gilt nur fuer C5).
-export const deviceConfigDoc = (id: string) =>
-  doc(db, ...devicePath(id), "config", "main");
 export const scaleDoc = (id: string, scaleId: string) =>
   doc(db, ...devicePath(id), "scales", scaleId);
 export const scalesCol = (id: string) =>
@@ -259,19 +256,11 @@ export async function clearFeedTracking(
   });
 }
 
-// Globale Einstellungen fuer alle ESPs.
+// Globale Einstellungen fuer alle ESPs (Verhalten + S3-Hardware/Sensoren).
 export async function updateGlobalConfig(
   patch: Partial<MainConfig>,
 ): Promise<void> {
   await setDoc(globalConfigDoc(), patch, { merge: true });
-}
-
-// Pro-Geraet-Config (S3-Bienenstand: Pins/Sensoren/Verhalten).
-export async function updateDeviceConfig(
-  deviceId: string,
-  patch: Partial<MainConfig>,
-): Promise<void> {
-  await setDoc(deviceConfigDoc(deviceId), patch, { merge: true });
 }
 
 // ----- S3-Bienenstand: Geraete-Typ + Pin-Belegung ---------------------------

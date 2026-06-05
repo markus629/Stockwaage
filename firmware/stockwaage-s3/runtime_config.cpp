@@ -7,8 +7,11 @@ String scaleId(int idx) {
   return String("s") + String(idx + 1);
 }
 
-static String mainDocPath(const String& deviceId) {
-  return String("users/") + OWNER_UID + "/devices/" + deviceId + "/config/main";
+// GLOBALE Config (gilt fuer ALLE ESPs, S3 wie C5): users/{uid}/config/main.
+// Alle S3 sind gleich aufgebaut -> eine gemeinsame Hardware/Sensor-Config.
+// Pro-Geraet bleibt nur die Kalibrierung (scales) und die Waagen-Anzahl.
+static String mainDocPath(const String& /*deviceId*/) {
+  return String("users/") + OWNER_UID + "/config/main";
 }
 static String scaleDocPath(const String& deviceId, int idx) {
   return String("users/") + OWNER_UID + "/devices/" + deviceId
@@ -38,8 +41,11 @@ bool RuntimeConfig::load(const String& idToken, const String& deviceId) {
       JsonObject fields = doc["fields"];
       main.intervalSec      = (uint32_t)fb::readInteger(fields["intervalSec"],
                                                        main.intervalSec);
+      // stayAwakeUntilMs ist transient (per stayAwake-Command in-memory
+      // gesetzt) und steht NICHT in der globalen Config -> Wert behalten.
       main.stayAwakeUntilMs = (uint64_t)fb::readInteger(
-                                  fields["stayAwakeUntilMs"], 0);
+                                  fields["stayAwakeUntilMs"],
+                                  main.stayAwakeUntilMs);
       main.sckPin           = (int)fb::readInteger(fields["sckPin"],
                                                    main.sckPin);
       main.i2cSda           = (int)fb::readInteger(fields["i2cSda"],
@@ -117,18 +123,6 @@ bool RuntimeConfig::saveScale(const String& idToken, const String& deviceId,
   // gesetzte "learning"-Feld erhalten bleibt.
   return fb::patchDoc(idToken, scaleDocPath(deviceId, idx), body,
                       "enabled,name,offset,scaleFactor,tempCoef,tempRefC");
-}
-
-bool RuntimeConfig::saveMain(const String& idToken,
-                             const String& deviceId) const {
-  DynamicJsonDocument doc(512);
-  JsonObject fields = doc.createNestedObject("fields");
-  fb::writeInteger(fields, "intervalSec",      main.intervalSec);
-  fb::writeInteger(fields, "stayAwakeUntilMs", main.stayAwakeUntilMs);
-  String body;
-  serializeJson(doc, body);
-  return fb::patchDoc(idToken, mainDocPath(deviceId), body,
-                      "intervalSec,stayAwakeUntilMs");
 }
 
 double RuntimeConfig::computeKg(int idx, double raw, double tempC) const {

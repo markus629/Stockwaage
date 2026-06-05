@@ -55,7 +55,6 @@ bool processPending(const String& idToken, const String& deviceId,
   if (docs.isNull() || docs.size() == 0) return true;
 
   bool allOk = true;
-  bool mainDirty = false;
   bool scaleDirty[NUM_SCALES] = {false};
 
   for (JsonObject d : docs) {
@@ -123,8 +122,8 @@ bool processPending(const String& idToken, const String& deviceId,
     }
     else if (type == "stayAwake") {
       long long durMs = fb::readInteger(payload["durationMs"], 600000); // 10 min
+      // Nur in-memory (transient fuer diesen Wach-Zyklus), nicht persistieren.
       cfg.main.stayAwakeUntilMs = (uint64_t)(time(nullptr) * 1000LL + durMs);
-      mainDirty = true;
       ok = true;
     }
     else if (type == "reload") {
@@ -137,7 +136,6 @@ bool processPending(const String& idToken, const String& deviceId,
         // markiere "done" BEVOR wir flashen, sonst loopen wir bei
         // erfolgreichem Reboot in den gleichen Command rein.
         markDone(idToken, deviceId, cmdId, "done");
-        if (mainDirty) cfg.saveMain(idToken, deviceId);
         for (int i = 0; i < NUM_SCALES; i++) {
           if (scaleDirty[i]) cfg.saveScale(idToken, deviceId, i);
         }
@@ -161,11 +159,10 @@ bool processPending(const String& idToken, const String& deviceId,
   }
 
   bool anyScaleDirty = false;
-  if (mainDirty) cfg.saveMain(idToken, deviceId);
   for (int i = 0; i < NUM_SCALES; i++) {
     if (scaleDirty[i]) { cfg.saveScale(idToken, deviceId, i); anyScaleDirty = true; }
   }
-  if (configChanged) *configChanged = mainDirty || anyScaleDirty;
+  if (configChanged) *configChanged = anyScaleDirty;
 
   return allOk;
 }
