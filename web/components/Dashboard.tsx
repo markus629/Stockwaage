@@ -13,6 +13,8 @@ import {
   YAxis,
 } from "recharts";
 import type {
+  DailyStat,
+  Device,
   MainConfig,
   Reading,
   ScaleConfig,
@@ -20,12 +22,16 @@ import type {
 import ScaleChart from "./ScaleChart";
 
 const DASHBOARD_DAYS = 3;
+// Fenster fuer die Winterfutter-Hochrechnung (Tage Durchschnitts-Verbrauch).
+const FEED_TREND_DAYS = 21;
 
 type Props = {
   readings: Reading[];
   scales: Record<string, ScaleConfig>;
   scaleIds: string[];
   mainCfg: MainConfig;
+  device: Device | null;
+  dailyStats: DailyStat[];
 };
 
 export default function Dashboard({
@@ -33,6 +39,8 @@ export default function Dashboard({
   scales,
   scaleIds,
   mainCfg,
+  device,
+  dailyStats,
 }: Props) {
   const windowReadings = useMemo(() => {
     const start = new Date();
@@ -56,7 +64,21 @@ export default function Dashboard({
     !!mainCfg.rainEnabled &&
     windowReadings.some((r) => r.rainRaw !== undefined);
 
+  // Status je Waage: Schwarm-Flag + Futter-Trend (kg/Tag, Reichweite).
+  const statusRows = useMemo(
+    () =>
+      scaleIds.map((sid) => ({
+        sid,
+        name: scales[sid]?.name || sid,
+        swarm: !!device?.swarmAlerts?.[sid],
+        feed: feedTrend(dailyStats, sid),
+      })),
+    [scaleIds, scales, device, dailyStats],
+  );
+  const hasStatus = scaleIds.length > 0;
+
   const empty =
+    !hasStatus &&
     dashboardScales.length === 0 &&
     !showTemp &&
     !showBattery &&
@@ -74,6 +96,47 @@ export default function Dashboard({
 
   return (
     <div className="grid gap-3 sm:grid-cols-2">
+      {hasStatus && (
+        <Tile title="Status" subtitle="Schwarm & Futter" wide>
+          <ul className="divide-y divide-neutral-100 text-sm">
+            {statusRows.map((r) => (
+              <li
+                key={r.sid}
+                className="flex items-center gap-2 py-1.5"
+              >
+                <span
+                  className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${
+                    r.swarm ? "bg-red-500" : "bg-green-500"
+                  }`}
+                  title={r.swarm ? "Schwarm-Verdacht!" : "alles ok"}
+                />
+                <span className="flex-1 truncate">{r.name}</span>
+                {r.swarm && (
+                  <span className="rounded bg-red-50 px-1.5 py-0.5 text-xs font-medium text-red-700">
+                    Schwarm?
+                  </span>
+                )}
+                <span className="font-mono text-xs text-neutral-500">
+                  {r.feed
+                    ? `${r.feed.perDay > 0 ? "+" : ""}${r.feed.perDay.toFixed(
+                        2,
+                      )} kg/Tag${
+                        r.feed.daysLeft !== null
+                          ? ` · ~${r.feed.daysLeft} T`
+                          : ""
+                      }`
+                    : "—"}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[10px] text-neutral-400">
+            kg/Tag = Ø-Änderung der letzten {FEED_TREND_DAYS} Tage. Bei
+            Abnahme: geschätzte Reichweite bis 0 kg (Winterfutter).
+          </p>
+        </Tile>
+      )}
+
       {dashboardScales.map((sid) => (
         <Tile
           key={sid}
@@ -367,4 +430,40 @@ function RainBars({ readings }: { readings: Reading[] }) {
 function tsLabel(v: number | string): string {
   const d = new Date(Number(v));
   return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}h`;
+}
+
+// Lineare Regression ueber die Tages-Schlussgewichte (last) der letzten
+// FEED_TREND_DAYS Tage -> Steigung in kg/Tag. Bei Abnahme zusaetzlich die
+// geschaetzte Reichweite bis 0 kg (Winterfutter-Prognose).
+function feedTrend(
+  stats: DailyStat[],
+  scaleId: string,
+): { perDay: number; daysLeft: number | null } | null {
+  const cutoff = Date.now() - FEED_TREND_DAYS * 86_400_000;
+  const pts: Array<{ x: number; y: number }> = [];
+  for (const s of stats) {
+    const agg = s.scales?.[scaleId];
+    if (!agg || agg.count <= 0 || !isFinite(agg.last)) continue;
+    const t = new Date(s.date).getTime();
+    if (t < cutoff) continue;
+    pts.push({ x: t / 86_400_000, y: agg.last }); // x in Tagen
+  }
+  if (pts.length < 3) return null;
+  const n = pts.length;
+  const mx = pts.reduce((a, p) => a + p.x, 0) / n;
+  const my = pts.reduce((a, p) => a + p.y, 0) / n;
+  let num = 0;
+  let den = 0;
+  for (const p of pts) {
+    num += (p.x - mx) * (p.y - my);
+    den += (p.x - mx) ** 2;
+  }
+  if (den === 0) return null;
+  const perDay = num / den;
+  const lastKg = pts[pts.length - 1].y;
+  const daysLeft =
+    perDay < -0.01 && lastKg > 0
+      ? Math.max(0, Math.round(lastKg / -perDay))
+      : null;
+  return { perDay, daysLeft };
 }

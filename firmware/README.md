@@ -105,6 +105,7 @@ Wake-Settings bei jedem Config-Load in NVS gecacht.
 users/{ownerUid}/devices/{deviceId}
   deviceId, lastSeen, vBat, intervalSec
   firmwareVersion, latestFirmwareVersion, latestFirmwareUrl
+  swarmAlerts: { s1: true, ... }     # Schwarm-Verdacht aus letzter Messung
 
   config/main
     intervalSec, stayAwakeUntilMs
@@ -116,15 +117,15 @@ users/{ownerUid}/devices/{deviceId}
     wakeButtonEnabled, wakeButtonPin, wakeButtonLevel, wakePauseMin
     autoUpdateEnabled
 
-  scales/{s1..s8}
-    enabled, name, offset, scaleFactor, tempCoef, tempRefC,
-    dtPin, onDashboard
+  scales/{s1..s8}                     # name/dtPin/onDashboard nur vom UI;
+    name, offset, scaleFactor, tempCoef, tempRefC,   # ESP schreibt nur
+    dtPin, onDashboard, learning                     # offset/scaleFactor/temp*
 
   readings/{ts}
-    ts, vBat, boots
+    ts, expireAt                      # expireAt = ts+60d -> Firestore-TTL
     ambientC, ambientHumidity, ambientPressure
     batteryV, batteryA, solarV, solarA, rainRaw
-    scales: { s1: { raw, kg? }, ... }
+    scales: { s1: { raw, kg?, swarm? }, ... }   # swarm=true bei Gewichtssturz
 
   dailyStats/{YYYY-MM-DD}            # Tages-Aggregate für Langzeit-Graph
     date
@@ -161,6 +162,31 @@ kg          = (raw - offset - tempCoef * (ambientC - tempRefC)) / scaleFactor
 `kg` wird nur geschrieben wenn `scaleFactor != 0` und `ambientC` bekannt.
 Der Rohwert wird **immer** geschrieben → spätere Re-Kalibrierung jederzeit
 möglich.
+
+## Schwarm-Erkennung
+
+Fällt das Gewicht einer kalibrierten Waage zwischen zwei Messungen um mehr
+als `SWARM_DROP_KG` (Default 1,5 kg, in `config.h`), setzt der ESP
+`scales.sN.swarm=true` im Reading **und** sammelt alle betroffenen Waagen in
+`device.swarmAlerts`. Das Dashboard zeigt pro Waage einen grünen/roten Punkt,
+ohne dafür Rohdaten laden zu müssen. Das letzte Gewicht je Waage liegt in
+RTC-Memory und übersteht Deep Sleep.
+
+## Firestore-TTL für `readings` (einmalig einrichten)
+
+Jedes Reading bekommt ein `expireAt`-Timestamp (jetzt + 60 Tage). Damit
+Firestore die alten Dokumente automatisch löscht, einmalig eine TTL-Policy
+anlegen (Langzeit-Historie bleibt in `dailyStats` erhalten):
+
+```bash
+gcloud firestore fields ttls update expireAt \
+  --collection-group=readings \
+  --enable-ttl \
+  --project=stockwaage-132b6
+```
+
+Alternativ in der Firebase Console → Firestore → TTL → Policy auf
+`readings` / Feld `expireAt`.
 
 ## Command-Lifecycle
 

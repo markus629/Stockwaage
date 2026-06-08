@@ -41,5 +41,7 @@ void writeNumber (JsonObject fields, const char* key, double v);
 void writeInteger(JsonObject fields, const char* key, long long v);
 void writeString (JsonObject fields, const char* key, const String& v);
 void writeBool   (JsonObject fields, const char* key, bool v);
+// Firestore timestampValue (RFC3339) aus Unix-Epoch-Sekunden -> fuer TTL.
+void writeTimestamp(JsonObject fields, const char* key, time_t epoch);
 
 } // namespace fb

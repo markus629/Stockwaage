@@ -175,5 +175,12 @@ void writeString(JsonObject fields, const char* key, const String& v) {
 void writeBool(JsonObject fields, const char* key, bool v) {
   fields[key]["booleanValue"] = v;
 }
+void writeTimestamp(JsonObject fields, const char* key, time_t epoch) {
+  struct tm tmv;
+  gmtime_r(&epoch, &tmv);
+  char buf[24];
+  strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tmv);
+  fields[key]["timestampValue"] = buf;
+}
 
 } // namespace fb

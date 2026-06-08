@@ -134,11 +134,17 @@ function DeviceDetail() {
 
   useEffect(() => {
     if (!user || user === "loading" || !deviceId) return;
+    // F2: Rohdaten nur laden, wenn der aktive Tab sie braucht. Settings
+    // nutzt keine readings. Dashboard reicht 3 Tage (Mini-Stapel), der
+    // Waagen-Tab braucht bis zu RAW_WINDOW_DAYS fuer den Stepper.
+    if (tab !== "dashboard" && tab !== "scales") {
+      setWindowReadings([]);
+      return;
+    }
+    const windowDays = tab === "dashboard" ? 3 : RAW_WINDOW_DAYS;
     const start = new Date();
     start.setHours(0, 0, 0, 0);
-    // Rohdaten nur fuer den 24h-Stapel (max. Stepper = 21 Tage).
-    // Langzeit + Tages-Aenderung kommen aus dailyStats.
-    const cutoff = start.getTime() - (RAW_WINDOW_DAYS - 1) * 86_400_000;
+    const cutoff = start.getTime() - (windowDays - 1) * 86_400_000;
     const unsub = onSnapshot(
       query(
         readingsCol(deviceId),
@@ -150,7 +156,7 @@ function DeviceDetail() {
       },
     );
     return () => unsub();
-  }, [user, deviceId]);
+  }, [user, deviceId, tab]);
 
   const scaleIds = useMemo(
     () => Object.keys(scales).sort((a, b) => a.localeCompare(b)),
@@ -237,6 +243,8 @@ function DeviceDetail() {
           scales={scales}
           scaleIds={scaleIds}
           mainCfg={mainCfg}
+          device={device}
+          dailyStats={dailyStats}
         />
       )}
 

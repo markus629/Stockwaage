@@ -40,7 +40,8 @@ bool markDone(const String& idToken, const String& deviceId, const String& cmdId
 namespace commands {
 
 bool processPending(const String& idToken, const String& deviceId,
-                    RuntimeConfig& cfg) {
+                    RuntimeConfig& cfg, bool* changed) {
+  if (changed) *changed = false;
   String resp;
   if (!fb::listDocs(idToken, commandsCollPath(deviceId), 20, resp)) return false;
   if (resp.length() == 0) return true;
@@ -66,6 +67,7 @@ bool processPending(const String& idToken, const String& deviceId,
     JsonObject f = d["fields"];
     String status = fb::readString(f["status"], "pending");
     if (status != "pending") continue;
+    if (changed) *changed = true;  // ein pending Command wird verarbeitet
 
     String type    = fb::readString(f["type"]);
     String scaleSid= fb::readString(f["scaleId"]);
@@ -85,7 +87,6 @@ bool processPending(const String& idToken, const String& deviceId,
         if (isnan(raw)) { err = "hx711 timeout"; }
         else {
           cfg.scales[idx].offset = raw;
-          if (!cfg.scales[idx].enabled) cfg.scales[idx].enabled = true;
           scaleDirty[idx] = true;
           ok = true;
         }

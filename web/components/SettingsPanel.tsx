@@ -22,6 +22,7 @@ import {
   type Reading,
 } from "@/lib/devices";
 import PinSelect from "./PinSelect";
+import DebouncedInput from "./DebouncedInput";
 
 type Props = {
   deviceId: string;
@@ -53,13 +54,13 @@ export default function SettingsPanel({
       <Section title="Allgemein">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Mess-Intervall (Sekunden)">
-            <input
+            <DebouncedInput
               type="number"
               min={30}
               step={30}
               value={mainCfg.intervalSec ?? intervalSecFallback ?? ""}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10);
+              onCommit={(s) => {
+                const v = parseInt(s, 10);
                 if (!isNaN(v) && v >= 30)
                   updateMainConfig(deviceId, { intervalSec: v });
               }}
@@ -271,13 +272,13 @@ export default function SettingsPanel({
             </select>
           </Field>
           <Field label="Messpause bei Doppelklick (Minuten)">
-            <input
+            <DebouncedInput
               type="number"
               min={1}
               max={1440}
               value={mainCfg.wakePauseMin ?? 30}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10);
+              onCommit={(s) => {
+                const v = parseInt(s, 10);
                 if (!isNaN(v) && v >= 1)
                   updateMainConfig(deviceId, {
                     wakePauseMin: Math.min(1440, v),

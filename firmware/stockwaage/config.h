@@ -54,5 +54,10 @@ static const int PIN_HX711_DT[NUM_SCALES] = {
 #define WIFI_PORTAL_TIMEOUT_SEC   180   // 3 Min, danach Deep Sleep
 #define WIFI_CONNECT_TIMEOUT_SEC  20
 
+// ----- Schwarm-Erkennung ----------------------------------------------------
+// Faellt das Gewicht einer kalibrierten Waage zwischen zwei Messungen um mehr
+// als SWARM_DROP_KG (und das negativ -> Verlust), wird ein Alarm-Flag gesetzt.
+#define SWARM_DROP_KG             1.5
+
 // ----- Captive Portal -------------------------------------------------------
 #define AP_SSID             "stockwaage-setup"

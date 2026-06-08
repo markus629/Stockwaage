@@ -26,6 +26,8 @@ export type Device = {
   firmwareVersion?: string;
   latestFirmwareVersion?: string;
   latestFirmwareUrl?: string;
+  // Schwarm-Verdacht je Waage aus der letzten Messung: { s1: true, ... }
+  swarmAlerts?: Record<string, boolean>;
 };
 
 export type MainConfig = {
@@ -83,7 +85,6 @@ export const DEFAULT_INA_SOLAR_ADDR = 0x41;
 
 export type ScaleConfig = {
   id: string; // "s1".."s8"
-  enabled?: boolean;
   name?: string;
   offset?: number;
   scaleFactor?: number;
@@ -94,12 +95,10 @@ export type ScaleConfig = {
   learning?: { startedAt: number };
 };
 
-export type ScaleReading = { raw: number; kg?: number };
+export type ScaleReading = { raw: number; kg?: number; swarm?: boolean };
 
 export type Reading = {
   ts: number;
-  vBat?: number;
-  boots?: number;
   ambientC?: number;
   ambientHumidity?: number;
   ambientPressure?: number;
@@ -298,8 +297,14 @@ async function dropScaleFieldInBatches(
   }
 }
 
-// Loescht eine Waage vollstaendig: Konfiguration, alle Kommentare und das
-// scales.<sid>-Feld aus saemtlichen readings + dailyStats. Unwiderruflich.
+// Sichtbares Rohdaten-Fenster (Tage). Aelteres wird nie im Chart geladen
+// (Langzeit nutzt dailyStats) und verfaellt per Firestore-TTL.
+const VISIBLE_READING_DAYS = 21;
+
+// Loescht eine Waage: Konfiguration, alle Kommentare, das scales.<sid>-Feld
+// aus den readings des sichtbaren Fensters und aus allen dailyStats.
+// Unwiderruflich. F6: readings-Cleanup auf das Chart-Fenster begrenzt, damit
+// die Operation nicht ueber zehntausende Alt-Dokumente laeuft.
 export async function removeScale(
   deviceId: string,
   scaleId: string,
@@ -310,14 +315,17 @@ export async function removeScale(
   );
   await deleteRefsInBatches(cs.docs.map((d) => d.ref));
 
-  // 2) scales.<sid> aus allen readings entfernen (geteilte Dokumente).
-  const rs = await getDocs(readingsCol(deviceId));
+  // 2) scales.<sid> aus den readings des sichtbaren Fensters entfernen.
+  const cutoff = Date.now() - VISIBLE_READING_DAYS * 86_400_000;
+  const rs = await getDocs(
+    query(readingsCol(deviceId), where("ts", ">=", cutoff)),
+  );
   await dropScaleFieldInBatches(
     rs.docs.map((d) => d.ref),
     scaleId,
   );
 
-  // 3) scales.<sid> aus allen Tages-Aggregaten entfernen.
+  // 3) scales.<sid> aus allen Tages-Aggregaten entfernen (klein: ~1/Tag).
   const ds = await getDocs(dailyStatsCol(deviceId));
   await dropScaleFieldInBatches(
     ds.docs.map((d) => d.ref),

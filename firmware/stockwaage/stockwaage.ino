@@ -27,6 +27,10 @@
 // ----- State (ueberlebt Deep Sleep) -----------------------------------------
 RTC_DATA_ATTR int     bootCount = 0;
 RTC_DATA_ATTR uint8_t failureStreak = 0;
+RTC_DATA_ATTR time_t  lastUpdateCheckEpoch = 0;   // F3: GitHub-Check drosseln
+// Letztes Tages-Schlussgewicht je Waage, fuer Schwarm-Erkennung (kg).
+RTC_DATA_ATTR double  lastKg[NUM_SCALES] = {0};
+RTC_DATA_ATTR bool    lastKgValid[NUM_SCALES] = {false};
 
 // ----- Globals --------------------------------------------------------------
 Preferences   prefs;
@@ -196,12 +200,13 @@ bool measureAndUpload() {
   float vBat = sensors::readVBat();
 
   // 2) Reading-Dokument bauen
-  uint64_t tsMs = (uint64_t)time(nullptr) * 1000ULL;
+  time_t  nowSec = time(nullptr);
+  uint64_t tsMs = (uint64_t)nowSec * 1000ULL;
   DynamicJsonDocument out(4096);
   JsonObject fields = out.createNestedObject("fields");
   fb::writeInteger(fields, "ts",    (long long)tsMs);
-  fb::writeNumber (fields, "vBat",  vBat);
-  fb::writeInteger(fields, "boots", bootCount);
+  // expireAt = jetzt + 60 Tage -> Firestore TTL raeumt alte readings auf (F5).
+  fb::writeTimestamp(fields, "expireAt", nowSec + 60LL * 24 * 3600);
   if (!isnan(env.tempC))    fb::writeNumber(fields, "ambientC",        env.tempC);
   if (!isnan(env.humidity)) fb::writeNumber(fields, "ambientHumidity", env.humidity);
   if (!isnan(env.pressure)) fb::writeNumber(fields, "ambientPressure", env.pressure);
@@ -216,6 +221,7 @@ bool measureAndUpload() {
 
   // scales: { s1: { raw, kg }, ... } als verschachtelte Map
   double kgScales[NUM_SCALES];
+  bool   swarm[NUM_SCALES] = {false};   // Schwarm-Verdacht pro Waage
   JsonObject scalesFields = fields.createNestedObject("scales")
                                   .createNestedObject("mapValue")
                                   .createNestedObject("fields");
@@ -225,11 +231,24 @@ bool measureAndUpload() {
     double kg = isnan(ambientC) ? NAN
                                 : cfg.computeKg(i, rawScales[i], ambientC);
     kgScales[i] = kg;
+
+    // Schwarm-Erkennung: ploetzlicher Gewichtssturz seit letzter Messung.
+    if (!isnan(kg)) {
+      if (lastKgValid[i] && (kg - lastKg[i]) <= -SWARM_DROP_KG) {
+        swarm[i] = true;
+        Serial.printf("[swarm] %s: %.2f -> %.2f kg (-%.2f)\n",
+                      scaleId(i).c_str(), lastKg[i], kg, lastKg[i] - kg);
+      }
+      lastKg[i] = kg;
+      lastKgValid[i] = true;
+    }
+
     JsonObject scaleEntry = scalesFields.createNestedObject(scaleId(i).c_str())
                                         .createNestedObject("mapValue")
                                         .createNestedObject("fields");
     fb::writeNumber(scaleEntry, "raw", rawScales[i]);
     if (!isnan(kg)) fb::writeNumber(scaleEntry, "kg", kg);
+    if (swarm[i])   fb::writeBool(scaleEntry, "swarm", true);
   }
 
   String body;
@@ -252,7 +271,7 @@ bool measureAndUpload() {
   // 3) Heartbeat. latest-Info kommt aus dem frueheren Check in setup().
   const updater::LatestInfo& latest = gLatest;
 
-  DynamicJsonDocument hb(1024);
+  DynamicJsonDocument hb(2048);
   JsonObject hbf = hb.createNestedObject("fields");
   fb::writeInteger(hbf, "lastSeen",        (long long)tsMs);
   fb::writeString (hbf, "deviceId",        deviceId);
@@ -263,14 +282,22 @@ bool measureAndUpload() {
     fb::writeString(hbf, "latestFirmwareVersion", latest.version);
     fb::writeString(hbf, "latestFirmwareUrl",     latest.binUrl);
   }
+  // swarmAlerts: { s1: true, ... } - nur Waagen mit aktuellem Verdacht.
+  // Dashboard liest das direkt aus dem Device-Doc, ohne readings zu laden.
+  String mask = latest.ok
+    ? "lastSeen,deviceId,vBat,intervalSec,firmwareVersion,latestFirmwareVersion,latestFirmwareUrl,swarmAlerts"
+    : "lastSeen,deviceId,vBat,intervalSec,firmwareVersion,swarmAlerts";
+  JsonObject saf = hbf.createNestedObject("swarmAlerts")
+                      .createNestedObject("mapValue")
+                      .createNestedObject("fields");
+  for (int i = 0; i < NUM_SCALES; i++) {
+    if (swarm[i]) fb::writeBool(saf, scaleId(i).c_str(), true);
+  }
   String hbBody;
   serializeJson(hb, hbBody);
   fb::patchDoc(
     idToken, String("users/") + OWNER_UID + "/devices/" + deviceId,
-    hbBody,
-    latest.ok
-      ? "lastSeen,deviceId,vBat,intervalSec,firmwareVersion,latestFirmwareVersion,latestFirmwareUrl"
-      : "lastSeen,deviceId,vBat,intervalSec,firmwareVersion");
+    hbBody, mask);
 
   return true;
 }
@@ -343,21 +370,28 @@ void setup() {
   // I2C-Sensoren (BME280, INA219x2) + Regensensor.
   sensors::initEnv(cfg.main);
 
-  commands::processPending(idToken, deviceId, cfg);
-  // commands haben evtl. die Config geaendert (tare/cal) -> erneut laden
-  cfg.load(idToken, deviceId);
+  bool cmdChanged = false;
+  commands::processPending(idToken, deviceId, cfg, &cmdChanged);
+  // commands haben evtl. die Config geaendert (tare/cal) -> nur dann neu
+  // laden (F1: spart ~9 reads pro Wakeup ohne Commands).
+  if (cmdChanged) cfg.load(idToken, deviceId);
 
-  // Firmware-Update so frueh wie moeglich pruefen, noch VOR der Messung.
-  // So gilt: Neustart -> (falls neuere Version + Auto-Update an) sofort
-  // flashen -> fertig, ohne erst den ganzen Messzyklus abzuwarten.
-  // Ein manueller Update-Command wurde bereits in processPending behandelt.
-  gLatest = updater::fetchLatest();
-  if (cfg.main.autoUpdateEnabled && gLatest.ok &&
-      updater::isNewer(FIRMWARE_VERSION, gLatest.version)) {
-    Serial.printf("[auto-update] %s -> %s (sofort)\n",
-                  FIRMWARE_VERSION, gLatest.version.c_str());
-    updater::applyUpdate(gLatest.binUrl);  // rebootet im Erfolgsfall
-    // wenn wir hier landen, ist das Update fehlgeschlagen -> normal weiter.
+  // Firmware-Update-Check, gedrosselt auf max. 1x / 6h (F3) - aber UNABHAENGIG
+  // von autoUpdate, damit das UI auch fuer den manuellen Button immer die
+  // neueste Version kennt. Auto-Apply nur wenn der Toggle an ist.
+  // (Ein manueller Update-Command wurde bereits in processPending behandelt.)
+  time_t nowEpoch = time(nullptr);
+  bool doCheck = (lastUpdateCheckEpoch == 0 ||
+                  nowEpoch - lastUpdateCheckEpoch >= 6 * 3600);
+  if (doCheck) {
+    lastUpdateCheckEpoch = nowEpoch;
+    gLatest = updater::fetchLatest();
+    if (cfg.main.autoUpdateEnabled && gLatest.ok &&
+        updater::isNewer(FIRMWARE_VERSION, gLatest.version)) {
+      Serial.printf("[auto-update] %s -> %s (sofort)\n",
+                    FIRMWARE_VERSION, gLatest.version.c_str());
+      updater::applyUpdate(gLatest.binUrl);  // rebootet im Erfolgsfall
+    }
   }
 
   bool ok = measureAndUpload();
@@ -371,8 +405,9 @@ void setup() {
     Serial.printf("StayAwake noch %llu s\n",
                   (cfg.main.stayAwakeUntilMs - nowMs) / 1000ULL);
     delay(3000);
-    commands::processPending(idToken, deviceId, cfg);
-    cfg.load(idToken, deviceId);
+    bool ch = false;
+    commands::processPending(idToken, deviceId, cfg, &ch);
+    if (ch) cfg.load(idToken, deviceId);
     nowMs = (uint64_t)time(nullptr) * 1000ULL;
   }
 

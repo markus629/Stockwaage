@@ -14,6 +14,9 @@ static String scaleDocPath(const String& deviceId, int idx) {
   return String("users/") + OWNER_UID + "/devices/" + deviceId
        + "/scales/" + scaleId(idx);
 }
+static String scalesCollPath(const String& deviceId) {
+  return String("users/") + OWNER_UID + "/devices/" + deviceId + "/scales";
+}
 
 bool RuntimeConfig::load(const String& idToken, const String& deviceId) {
   // --- main ---
@@ -56,23 +59,30 @@ bool RuntimeConfig::load(const String& idToken, const String& deviceId) {
     }
   }
 
-  // --- scales: ein GET pro scaleId (einfacher als Collection-Listing) ---
-  for (int i = 0; i < NUM_SCALES; i++) {
-    String resp2;
-    if (!fb::getDoc(idToken, scaleDocPath(deviceId, i), resp2)) continue;
-    if (resp2.length() == 0) continue;
-    DynamicJsonDocument doc(1024);
-    if (deserializeJson(doc, resp2)) continue;
-    JsonObject f = doc["fields"];
-    scales[i].exists      = true;
-    scales[i].enabled     = fb::readBool   (f["enabled"], false);
-    scales[i].name        = fb::readString (f["name"], "");
-    scales[i].offset      = fb::readNumber (f["offset"], 0.0);
-    scales[i].scaleFactor = fb::readNumber (f["scaleFactor"], 0.0);
-    scales[i].tempCoef    = fb::readNumber (f["tempCoef"], 0.0);
-    scales[i].tempRefC    = fb::readNumber (f["tempRefC"], 20.0);
-    scales[i].dtPin       = (int)fb::readInteger(f["dtPin"],
-                                                 PIN_HX711_DT[i]);
+  // --- scales: ein einziges Collection-Listing statt 8 Einzel-GETs (F1) ---
+  String sresp;
+  if (fb::listDocs(idToken, scalesCollPath(deviceId), NUM_SCALES, sresp) &&
+      sresp.length() > 0) {
+    DynamicJsonDocument sdoc(8192);
+    if (!deserializeJson(sdoc, sresp)) {
+      for (JsonObject d : sdoc["documents"].as<JsonArray>()) {
+        // name endet auf .../scales/sN -> Index ableiten
+        String dn = String((const char*)d["name"]);
+        int slash = dn.lastIndexOf("/s");
+        if (slash < 0) continue;
+        int idx = dn.substring(slash + 2).toInt() - 1;  // "s3" -> 2
+        if (idx < 0 || idx >= NUM_SCALES) continue;
+        JsonObject f = d["fields"];
+        scales[idx].exists      = true;
+        scales[idx].name        = fb::readString (f["name"], "");
+        scales[idx].offset      = fb::readNumber (f["offset"], 0.0);
+        scales[idx].scaleFactor = fb::readNumber (f["scaleFactor"], 0.0);
+        scales[idx].tempCoef    = fb::readNumber (f["tempCoef"], 0.0);
+        scales[idx].tempRefC    = fb::readNumber (f["tempRefC"], 20.0);
+        scales[idx].dtPin       = (int)fb::readInteger(f["dtPin"],
+                                                       PIN_HX711_DT[idx]);
+      }
+    }
   }
 
   return true;
@@ -83,18 +93,17 @@ bool RuntimeConfig::saveScale(const String& idToken, const String& deviceId,
   const auto& s = scales[idx];
   DynamicJsonDocument doc(1024);
   JsonObject fields = doc.createNestedObject("fields");
-  fb::writeBool   (fields, "enabled",     s.enabled);
-  fb::writeString (fields, "name",        s.name);
   fb::writeNumber (fields, "offset",      s.offset);
   fb::writeNumber (fields, "scaleFactor", s.scaleFactor);
   fb::writeNumber (fields, "tempCoef",    s.tempCoef);
   fb::writeNumber (fields, "tempRefC",    s.tempRefC);
   String body;
   serializeJson(doc, body);
-  // updateMask: nur die ESP-Felder ueberschreiben, damit das vom Browser
-  // gesetzte "learning"-Feld erhalten bleibt.
+  // updateMask: nur die ESP-eigenen Kalibrier-Felder ueberschreiben, damit
+  // die vom Browser gesetzten Felder (name, dtPin, onDashboard, learning)
+  // erhalten bleiben.
   return fb::patchDoc(idToken, scaleDocPath(deviceId, idx), body,
-                      "enabled,name,offset,scaleFactor,tempCoef,tempRefC");
+                      "offset,scaleFactor,tempCoef,tempRefC");
 }
 
 bool RuntimeConfig::saveMain(const String& idToken,
