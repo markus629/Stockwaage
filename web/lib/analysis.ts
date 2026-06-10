@@ -39,6 +39,34 @@ function localDay(ts: number): string {
   ).padStart(2, "0")}`;
 }
 
+// ----- Tagestrend -------------------------------------------------------------
+//
+// "Δ heute" = aktuelles Gewicht − Tages-Schlussgewicht des letzten Tages VOR
+// heute (aus den dailyStats). Die wichtigste Zahl fuer den Imker: traegt das
+// Volk gerade ein oder zehrt es?
+
+export function todayDelta(
+  dailyStats: DailyStat[],
+  scaleId: string,
+  currentKg: number | undefined,
+): number | null {
+  if (typeof currentKg !== "number" || !isFinite(currentKg)) return null;
+  const today = localDay(Date.now());
+  let refClose: number | null = null;
+  let refDate = "";
+  for (const s of dailyStats) {
+    const last = s.scales?.[scaleId]?.last;
+    if (typeof last !== "number" || !isFinite(last)) continue;
+    if (s.date >= today) continue; // heute laeuft noch -> nicht als Referenz
+    if (s.date > refDate) {
+      refDate = s.date;
+      refClose = last;
+    }
+  }
+  if (refClose === null) return null;
+  return currentKg - refClose;
+}
+
 export function forecastFeed(
   dailyStats: DailyStat[],
   scaleId: string,

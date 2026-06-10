@@ -37,10 +37,12 @@ function lerp(a: number, b: number, t: number): number {
   return Math.round(a + (b - a) * t);
 }
 
+// Heute = kraeftiges Amber (Honig), aeltere Tage werden kuehler und blasser
+// (Slate-Blau). Warm = jetzt, kalt = Vergangenheit.
 function colorForAge(ageIdx: number, total: number): string {
-  if (total <= 1) return "rgb(239,68,68)";
+  if (total <= 1) return "rgb(217,119,6)";
   const t = ageIdx / (total - 1);
-  return `rgb(${lerp(239, 59, t)},${lerp(68, 130, t)},${lerp(68, 246, t)})`;
+  return `rgb(${lerp(217, 100, t)},${lerp(119, 116, t)},${lerp(6, 139, t)})`;
 }
 
 function widthForAge(ageIdx: number, total: number): number {

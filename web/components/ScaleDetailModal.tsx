@@ -27,12 +27,14 @@ import {
 import CalibrationWizard from "./CalibrationWizard";
 import OnlineDot from "./OnlineDot";
 import ScaleCard from "./ScaleCard";
+import VitalChips from "./VitalChips";
 import { useScaleUiPrefs } from "@/lib/uiPrefs";
 
 const DEFAULT_STACK_DAYS = 7;
 
-// Floating-Window mit der Detailansicht einer Waage: Konfiguration/Kalibrierung,
-// Charts, Futter-Tracker und Logbuch. Globale Einstellungen kommen via mainCfg.
+// Floating-Window mit der Detailansicht einer C5-Waage: Gewicht + Graphen im
+// Zentrum, Kalibrierung/Konfiguration in der Karte. Globale Einstellungen
+// kommen via mainCfg.
 export default function ScaleDetailModal({
   deviceId,
   mainCfg,
@@ -129,17 +131,25 @@ export default function ScaleDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/40 p-4"
+      className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-[2px]"
       onClick={onClose}
     >
       <div
-        className="my-8 w-full max-w-2xl rounded-lg bg-white p-4 shadow-xl"
+        className="my-8 w-full max-w-2xl rounded-2xl bg-stone-50 p-4 shadow-2xl sm:p-5"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-3 flex items-start justify-between gap-2">
-          <div>
-            <h2 className="text-lg font-semibold">{cfg.name || deviceId}</h2>
-            <div className="text-xs text-neutral-500">
+        <div className="mb-4 flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="flex items-center gap-2 text-lg font-bold">
+              <span
+                aria-hidden
+                className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-lg"
+              >
+                ⚖️
+              </span>
+              <span className="truncate">{cfg.name || deviceId}</span>
+            </h2>
+            <div className="mt-1 text-xs text-neutral-500">
               {deviceId}
               {device?.lastSeen && (
                 <>
@@ -151,37 +161,35 @@ export default function ScaleDetailModal({
                   />
                 </>
               )}
-              {device?.vBat !== undefined && <> · {device.vBat.toFixed(2)} V</>}
             </div>
+            <VitalChips device={device} reading={current} />
           </div>
           <button
             onClick={onClose}
             aria-label="Schließen"
-            className="shrink-0 rounded p-1 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+            className="shrink-0 rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-900"
           >
             ✕
           </button>
         </div>
 
-        <ul>
-          <ScaleCard
-            deviceId={deviceId}
-            scaleId={sid}
-            cfg={cfg}
-            reading={current?.scales?.[sid]}
-            readings={windowReadings}
-            prefs={uiPrefs.get(sid)}
-            comments={comments.filter((c) => c.scaleId === sid)}
-            dailyStats={dailyStats}
-            feedStepThresholdKg={mainCfg.feedStepThresholdKg}
-            onPrefsChange={(patch) => uiPrefs.set(sid, patch)}
-            onCalibrate={() => setWizardOpen(true)}
-            onDelete={async () => {
-              await removeScale(deviceId, sid);
-              onClose();
-            }}
-          />
-        </ul>
+        <ScaleCard
+          deviceId={deviceId}
+          scaleId={sid}
+          cfg={cfg}
+          reading={current?.scales?.[sid]}
+          readings={windowReadings}
+          prefs={uiPrefs.get(sid)}
+          comments={comments.filter((c) => c.scaleId === sid)}
+          dailyStats={dailyStats}
+          feedStepThresholdKg={mainCfg.feedStepThresholdKg}
+          onPrefsChange={(patch) => uiPrefs.set(sid, patch)}
+          onCalibrate={() => setWizardOpen(true)}
+          onDelete={async () => {
+            await removeScale(deviceId, sid);
+            onClose();
+          }}
+        />
 
         {wizardOpen && (
           <CalibrationWizard

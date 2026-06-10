@@ -1,30 +1,39 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   signInWithEmailAndPassword,
   onAuthStateChanged,
   signOut,
   type User,
 } from "firebase/auth";
-import { limit, onSnapshot, orderBy, query } from "firebase/firestore";
+import { getDocs, limit, onSnapshot, orderBy, query } from "firebase/firestore";
 import { auth } from "@/lib/firebase";
 import {
+  dailyStatsCol,
   devicesCol,
   globalConfigDoc,
   isHiveDevice,
   readingsCol,
+  scalesCol,
+  type DailyStat,
   type Device,
   type MainConfig,
   type Reading,
 } from "@/lib/devices";
-import OnlineDot from "@/components/OnlineDot";
+import OnlineDot, { isOnline } from "@/components/OnlineDot";
 import FirmwareFleet from "@/components/FirmwareFleet";
 import SettingsPanel from "@/components/SettingsPanel";
 import ScaleDetailModal from "@/components/ScaleDetailModal";
 import HiveDetailModal from "@/components/HiveDetailModal";
 
 type Tab = "dashboard" | "settings";
+
+// Tages-Schlussgewichte (kg je Waage) des letzten abgeschlossenen Tages –
+// Referenz fuer den "Δ heute"-Trend auf den Kacheln.
+type YesterdayCloses = Record<string, Record<string, number>>;
+// Anzeigenamen der Waagen eines Bienenstands (einmalig geladen, kein Listener).
+type ScaleNames = Record<string, Record<string, string>>;
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -36,6 +45,9 @@ export default function Home() {
   const [mainCfg, setMainCfg] = useState<MainConfig>({});
   const [tab, setTab] = useState<Tab>("dashboard");
   const [selected, setSelected] = useState<string | null>(null);
+  const [yCloses, setYCloses] = useState<YesterdayCloses>({});
+  const [scaleNames, setScaleNames] = useState<ScaleNames>({});
+  const extrasLoaded = useRef<Set<string>>(new Set());
 
   useEffect(() => onAuthStateChanged(auth, setUser), []);
 
@@ -75,6 +87,42 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, idsKey]);
 
+  // Einmalig pro Gerät (kein Listener, schont das Read-Budget):
+  // 1) die letzten 2 Tages-Aggregate -> Schlussgewicht von gestern (Δ heute)
+  // 2) die Waagen-Namen (fuer die Bienenstand-Kachel)
+  useEffect(() => {
+    if (!user) return;
+    const todayKey = localDayKey(Date.now());
+    for (const id of ids) {
+      if (extrasLoaded.current.has(id)) continue;
+      extrasLoaded.current.add(id);
+      getDocs(
+        query(dailyStatsCol(id), orderBy("date", "desc"), limit(2)),
+      ).then((snap) => {
+        const ref = snap.docs
+          .map((d) => d.data() as DailyStat)
+          .find((s) => s.date < todayKey);
+        if (!ref?.scales) return;
+        const closes: Record<string, number> = {};
+        for (const [sid, agg] of Object.entries(ref.scales)) {
+          if (typeof agg?.last === "number" && isFinite(agg.last)) {
+            closes[sid] = agg.last;
+          }
+        }
+        setYCloses((prev) => ({ ...prev, [id]: closes }));
+      });
+      getDocs(scalesCol(id)).then((snap) => {
+        const names: Record<string, string> = {};
+        for (const d of snap.docs) {
+          const n = (d.data() as { name?: string }).name;
+          if (n) names[d.id] = n;
+        }
+        setScaleNames((prev) => ({ ...prev, [id]: names }));
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, idsKey]);
+
   const selectedDevice = selected
     ? devices.find((d) => d.id === selected) ?? { id: selected }
     : null;
@@ -105,52 +153,67 @@ export default function Home() {
   if (!user) {
     return (
       <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-4">
-        <h1 className="mb-6 text-2xl font-semibold">Stockwaage</h1>
-        <form onSubmit={handleLogin} className="space-y-3">
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded border border-neutral-300 px-3 py-2"
-            required
-          />
-          <input
-            type="password"
-            placeholder="Passwort"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded border border-neutral-300 px-3 py-2"
-            required
-          />
-          <button
-            type="submit"
-            className="w-full rounded bg-neutral-900 px-3 py-2 text-white hover:bg-neutral-700"
-          >
-            Anmelden
-          </button>
-          {loginError && <p className="text-sm text-red-600">{loginError}</p>}
-        </form>
+        <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+          <div className="mb-6 flex flex-col items-center text-center">
+            <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-3xl">
+              🐝
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight">Stockwaage</h1>
+            <p className="mt-1 text-sm text-neutral-500">
+              Bienenstock-Monitoring
+            </p>
+          </div>
+          <form onSubmit={handleLogin} className="space-y-3">
+            <input
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-lg border border-neutral-300 px-3 py-2 focus:border-amber-400 focus:outline-none"
+              required
+            />
+            <input
+              type="password"
+              placeholder="Passwort"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-lg border border-neutral-300 px-3 py-2 focus:border-amber-400 focus:outline-none"
+              required
+            />
+            <button
+              type="submit"
+              className="w-full rounded-lg bg-amber-500 px-3 py-2 font-medium text-white transition hover:bg-amber-600"
+            >
+              Anmelden
+            </button>
+            {loginError && <p className="text-sm text-red-600">{loginError}</p>}
+          </form>
+        </div>
       </main>
     );
   }
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-6">
-      <header className="mb-4 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Stockwaage</h1>
+      <header className="mb-1 flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-xl">
+            🐝
+          </div>
+          <h1 className="text-xl font-bold tracking-tight">Stockwaage</h1>
+        </div>
         <div className="flex items-center gap-3 text-sm">
-          <span className="hidden text-neutral-500 sm:inline">{user.email}</span>
+          <span className="hidden text-neutral-400 sm:inline">{user.email}</span>
           <button
             onClick={() => signOut(auth)}
-            className="rounded border border-neutral-300 px-2 py-1 hover:bg-neutral-100"
+            className="rounded-lg border border-neutral-300 px-2.5 py-1 text-neutral-600 hover:bg-white"
           >
             Logout
           </button>
         </div>
       </header>
 
-      <nav className="mb-4 flex border-b border-neutral-200">
+      <nav className="mb-5 flex border-b border-neutral-200">
         <TopTab active={tab === "dashboard"} onClick={() => setTab("dashboard")}>
           Dashboard
         </TopTab>
@@ -161,17 +224,23 @@ export default function Home() {
 
       {tab === "dashboard" &&
         (devices.length === 0 ? (
-          <p className="text-neutral-500">
-            Noch keine Waage. Starte einen ESP – sobald er sich verbunden hat,
-            erscheint er hier.
-          </p>
+          <div className="flex flex-col items-center rounded-2xl border border-dashed border-neutral-300 bg-white/60 px-6 py-16 text-center">
+            <span className="mb-3 text-4xl">🐝</span>
+            <p className="font-medium text-neutral-700">Noch keine Waage</p>
+            <p className="mt-1 max-w-xs text-sm text-neutral-500">
+              Starte einen ESP – sobald er sich verbunden hat, erscheint er
+              hier automatisch.
+            </p>
+          </div>
         ) : (
           <>
+            <SummaryStrip devices={devices} latest={latest} />
+
             {tempSensorMissing && (
               <button
                 type="button"
                 onClick={() => setTab("settings")}
-                className="mb-3 block w-full rounded-lg border border-amber-300 bg-amber-50 p-3 text-left text-sm text-amber-900 hover:bg-amber-100"
+                className="mb-3 block w-full rounded-xl border border-amber-300 bg-amber-50 p-3 text-left text-sm text-amber-900 hover:bg-amber-100"
               >
                 <span className="font-semibold">
                   ⚠️ Temperatursensor (BMP280) ist deaktiviert
@@ -184,20 +253,35 @@ export default function Home() {
                 </span>
               </button>
             )}
-            <ul className="grid gap-3 sm:grid-cols-2">
-              {devices.map((d) => (
-              <li key={d.id}>
-                <DeviceTile
-                  device={d}
-                  latest={latest[d.id]}
-                  isHive={isHiveDevice(
-                    d,
-                    Object.keys(latest[d.id]?.scales ?? {}).length,
-                  )}
-                  onClick={() => setSelected(d.id)}
-                />
-              </li>
-              ))}
+
+            <ul className="grid items-start gap-3 sm:grid-cols-2">
+              {devices.map((d) => {
+                const hive = isHiveDevice(
+                  d,
+                  Object.keys(latest[d.id]?.scales ?? {}).length,
+                );
+                return (
+                  <li key={d.id}>
+                    {hive ? (
+                      <HiveTile
+                        device={d}
+                        latest={latest[d.id]}
+                        yCloses={yCloses[d.id]}
+                        names={scaleNames[d.id]}
+                        onClick={() => setSelected(d.id)}
+                      />
+                    ) : (
+                      <ScaleTile
+                        device={d}
+                        latest={latest[d.id]}
+                        yCloses={yCloses[d.id]}
+                        names={scaleNames[d.id]}
+                        onClick={() => setSelected(d.id)}
+                      />
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </>
         ))}
@@ -242,7 +326,7 @@ function TopTab({
       onClick={onClick}
       className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${
         active
-          ? "border-neutral-900 text-neutral-900"
+          ? "border-amber-500 text-neutral-900"
           : "border-transparent text-neutral-500 hover:text-neutral-900"
       }`}
     >
@@ -251,85 +335,286 @@ function TopTab({
   );
 }
 
-function DeviceTile({
+// Kompakte Kennzahlen ueber den Kacheln: Geraete, online, Gesamtgewicht.
+function SummaryStrip({
+  devices,
+  latest,
+}: {
+  devices: Device[];
+  latest: Record<string, Reading | null>;
+}) {
+  const online = devices.filter((d) =>
+    isOnline(d.lastSeen, d.intervalSec),
+  ).length;
+  let scaleCount = 0;
+  let sum = 0;
+  let anyKg = false;
+  for (const d of devices) {
+    const scales = latest[d.id]?.scales ?? {};
+    for (const s of Object.values(scales)) {
+      scaleCount++;
+      if (typeof s?.kg === "number" && isFinite(s.kg)) {
+        sum += s.kg;
+        anyKg = true;
+      }
+    }
+  }
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-500">
+      <span>
+        <span className="font-semibold text-neutral-700">{devices.length}</span>{" "}
+        {devices.length === 1 ? "Gerät" : "Geräte"}
+      </span>
+      <span>
+        <span
+          className={`font-semibold ${
+            online === devices.length ? "text-green-600" : "text-amber-600"
+          }`}
+        >
+          {online}/{devices.length}
+        </span>{" "}
+        online
+      </span>
+      <span>
+        <span className="font-semibold text-neutral-700">{scaleCount}</span>{" "}
+        {scaleCount === 1 ? "Waage" : "Waagen"}
+      </span>
+      {anyKg && (
+        <span className="ml-auto font-mono tabular-nums">
+          Σ{" "}
+          <span className="font-semibold text-neutral-700">
+            {sum.toFixed(1)} kg
+          </span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ---- Kacheln ----------------------------------------------------------------
+
+const tileClass =
+  "block w-full rounded-xl border border-neutral-200 bg-white p-4 text-left shadow-sm transition hover:border-amber-300 hover:shadow-md";
+
+// C5: eine Waage = eine Kachel.
+function ScaleTile({
   device,
   latest,
-  isHive,
+  yCloses,
+  names,
   onClick,
 }: {
   device: Device;
   latest: Reading | null | undefined;
-  isHive: boolean;
+  yCloses?: Record<string, number>;
+  names?: Record<string, string>;
   onClick: () => void;
 }) {
-  const tempC = latest?.ambientC;
-  const vBat = device.vBat ?? latest?.vBat;
-  const scaleCount = Object.keys(latest?.scales ?? {}).length;
-  // C5 zeigt das Gewicht der einen Waage; ein S3-Bienenstand die Summe.
-  const kg = isHive ? sumKg(latest) : primaryKg(latest);
+  const sid = primarySid(latest);
+  const kg = sid ? latest?.scales?.[sid]?.kg : undefined;
+  const delta = deltaFor(kg, sid ? yCloses?.[sid] : undefined);
+  const name = (sid && names?.[sid]) || device.id;
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="block w-full rounded-lg border border-neutral-200 bg-white p-4 text-left transition hover:border-neutral-400 hover:bg-neutral-50"
-    >
+    <button type="button" onClick={onClick} className={tileClass}>
       <div className="flex items-baseline justify-between gap-2">
-        <span className="font-medium">
-          {isHive && <span className="mr-1">🐝</span>}
-          {device.id}
-        </span>
-        <span className="text-xs text-neutral-500">
+        <span className="truncate font-semibold">{name}</span>
+        <span className="shrink-0 text-xs text-neutral-400">
           {device.lastSeen ? formatAgo(device.lastSeen) : "—"}
           <OnlineDot lastSeen={device.lastSeen} intervalSec={device.intervalSec} />
         </span>
       </div>
-
-      {isHive && (
-        <div className="mt-0.5 text-xs text-neutral-500">
-          Bienenstand · {scaleCount} {scaleCount === 1 ? "Waage" : "Waagen"}
-        </div>
+      {name !== device.id && (
+        <div className="text-[11px] text-neutral-400">{device.id}</div>
       )}
 
-      <div className="mt-2 font-mono text-2xl font-semibold tabular-nums">
-        {kg !== undefined ? `${kg.toFixed(2)} kg` : "—"}
-        {isHive && kg !== undefined && (
-          <span className="ml-1 text-xs font-normal text-neutral-400">
-            gesamt
-          </span>
-        )}
-      </div>
-
-      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-500">
-        <span>{tempC !== undefined ? `${tempC.toFixed(1)} °C` : "– °C"}</span>
-        <span>{vBat !== undefined ? `${vBat.toFixed(2)} V` : "– V"}</span>
-        {device.intervalSec && <span>Intervall {device.intervalSec}s</span>}
-      </div>
+      <WeightHero kg={kg} delta={delta} />
+      <TileFooter device={device} latest={latest} />
     </button>
   );
 }
 
-function primaryKg(r: Reading | null | undefined): number | undefined {
-  if (!r?.scales) return undefined;
-  for (const k of Object.keys(r.scales).sort()) {
-    const kg = r.scales[k]?.kg;
-    if (typeof kg === "number" && isFinite(kg)) return kg;
-  }
-  return undefined;
-}
-
-function sumKg(r: Reading | null | undefined): number | undefined {
-  if (!r?.scales) return undefined;
+// S3: Bienenstand = eine Kachel mit allen Waagen.
+function HiveTile({
+  device,
+  latest,
+  yCloses,
+  names,
+  onClick,
+}: {
+  device: Device;
+  latest: Reading | null | undefined;
+  yCloses?: Record<string, number>;
+  names?: Record<string, string>;
+  onClick: () => void;
+}) {
+  const sids = Object.keys(latest?.scales ?? {}).sort();
   let sum = 0;
-  let any = false;
-  for (const k of Object.keys(r.scales)) {
-    const kg = r.scales[k]?.kg;
-    if (typeof kg === "number" && isFinite(kg)) {
-      sum += kg;
-      any = true;
+  let anySum = false;
+  let dSum = 0;
+  let anyDelta = false;
+  for (const sid of sids) {
+    const kg = latest?.scales?.[sid]?.kg;
+    if (typeof kg !== "number" || !isFinite(kg)) continue;
+    sum += kg;
+    anySum = true;
+    const prev = yCloses?.[sid];
+    if (typeof prev === "number") {
+      dSum += kg - prev;
+      anyDelta = true;
     }
   }
-  return any ? sum : undefined;
+
+  return (
+    <button type="button" onClick={onClick} className={tileClass}>
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-1.5 font-semibold">
+          <span aria-hidden>🐝</span>
+          <span className="truncate">{device.id}</span>
+        </span>
+        <span className="shrink-0 text-xs text-neutral-400">
+          {device.lastSeen ? formatAgo(device.lastSeen) : "—"}
+          <OnlineDot lastSeen={device.lastSeen} intervalSec={device.intervalSec} />
+        </span>
+      </div>
+      <div className="text-[11px] font-medium uppercase tracking-wide text-amber-600">
+        Bienenstand · {sids.length} {sids.length === 1 ? "Waage" : "Waagen"}
+      </div>
+
+      <WeightHero
+        kg={anySum ? sum : undefined}
+        delta={anyDelta ? dSum : null}
+        suffix="gesamt"
+      />
+
+      {sids.length > 0 && (
+        <ul className="mt-2 divide-y divide-neutral-100 rounded-lg border border-neutral-100 bg-neutral-50/60 px-2.5 py-1">
+          {sids.map((sid) => {
+            const kg = latest?.scales?.[sid]?.kg;
+            const d = deltaFor(kg, yCloses?.[sid]);
+            return (
+              <li
+                key={sid}
+                className="flex items-baseline justify-between gap-2 py-1 text-sm"
+              >
+                <span className="truncate text-neutral-600">
+                  {names?.[sid] || sid}
+                </span>
+                <span className="flex shrink-0 items-baseline gap-2">
+                  {d !== null && (
+                    <span
+                      className={`text-[11px] font-medium tabular-nums ${
+                        d >= 0 ? "text-green-600" : "text-red-500"
+                      }`}
+                    >
+                      {d >= 0 ? "+" : ""}
+                      {d.toFixed(1)}
+                    </span>
+                  )}
+                  <span className="font-mono font-medium tabular-nums">
+                    {typeof kg === "number" && isFinite(kg)
+                      ? `${kg.toFixed(1)} kg`
+                      : "—"}
+                  </span>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <TileFooter device={device} latest={latest} />
+    </button>
+  );
+}
+
+function WeightHero({
+  kg,
+  delta,
+  suffix,
+}: {
+  kg?: number;
+  delta: number | null;
+  suffix?: string;
+}) {
+  const hasKg = typeof kg === "number" && isFinite(kg);
+  return (
+    <div className="mt-2 flex flex-wrap items-baseline gap-x-2">
+      <span className="font-mono text-3xl font-bold tabular-nums">
+        {hasKg ? kg!.toFixed(2) : "—"}
+        {hasKg && (
+          <span className="ml-1 text-base font-medium text-neutral-400">
+            kg{suffix ? ` ${suffix}` : ""}
+          </span>
+        )}
+      </span>
+      {delta !== null && (
+        <span
+          className={`text-sm font-semibold tabular-nums ${
+            delta >= 0 ? "text-green-600" : "text-red-500"
+          }`}
+          title="Veränderung seit dem letzten Tagesabschluss"
+        >
+          {delta >= 0 ? "▲" : "▼"} {delta >= 0 ? "+" : ""}
+          {delta.toFixed(2)} heute
+        </span>
+      )}
+    </div>
+  );
+}
+
+function TileFooter({
+  device,
+  latest,
+}: {
+  device: Device;
+  latest: Reading | null | undefined;
+}) {
+  const tempC = latest?.ambientC;
+  const vBat = device.vBat ?? latest?.vBat ?? latest?.batteryV;
+  const solarV = latest?.solarV;
+  return (
+    <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 border-t border-neutral-100 pt-2 text-xs text-neutral-500">
+      <span title="Temperatur">
+        🌡 {tempC !== undefined ? `${tempC.toFixed(1)} °C` : "—"}
+      </span>
+      <span title="Akku">
+        🔋 {vBat !== undefined ? `${vBat.toFixed(2)} V` : "—"}
+      </span>
+      {solarV !== undefined && (
+        <span title="Solar">☀️ {solarV.toFixed(1)} V</span>
+      )}
+      {device.intervalSec && (
+        <span className="ml-auto" title="Mess-Intervall">
+          ⏱ {formatInterval(device.intervalSec)}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ---- Helpers ------------------------------------------------------------------
+
+function primarySid(r: Reading | null | undefined): string | undefined {
+  if (!r?.scales) return undefined;
+  return Object.keys(r.scales).sort()[0];
+}
+
+function deltaFor(kg?: number, prev?: number): number | null {
+  if (typeof kg !== "number" || !isFinite(kg)) return null;
+  if (typeof prev !== "number" || !isFinite(prev)) return null;
+  return kg - prev;
+}
+
+function localDayKey(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function formatInterval(sec: number): string {
+  if (sec % 3600 === 0) return `${sec / 3600}h`;
+  if (sec >= 60) return `${Math.round(sec / 60)}min`;
+  return `${sec}s`;
 }
 
 function formatAgo(tsMs: number): string {

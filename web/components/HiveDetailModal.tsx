@@ -33,6 +33,7 @@ import CalibrationWizard from "./CalibrationWizard";
 import OnlineDot from "./OnlineDot";
 import PinSelect from "./PinSelect";
 import ScaleCard from "./ScaleCard";
+import VitalChips from "./VitalChips";
 import { useScaleUiPrefs } from "@/lib/uiPrefs";
 
 const DEFAULT_STACK_DAYS = 7;
@@ -155,17 +156,26 @@ export default function HiveDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/40 p-4"
+      className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-[2px]"
       onClick={onClose}
     >
       <div
-        className="my-8 w-full max-w-2xl rounded-lg bg-white p-4 shadow-xl"
+        className="my-8 w-full max-w-3xl rounded-2xl bg-stone-50 p-4 shadow-2xl sm:p-5"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-3 flex items-start justify-between gap-2">
-          <div>
-            <h2 className="text-lg font-semibold">🐝 {deviceId}</h2>
-            <div className="text-xs text-neutral-500">
+        {/* Kopf: Identitaet + Vitalwerte des Stands */}
+        <div className="mb-4 flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="flex items-center gap-2 text-lg font-bold">
+              <span
+                aria-hidden
+                className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-lg"
+              >
+                🐝
+              </span>
+              <span className="truncate">{deviceId}</span>
+            </h2>
+            <div className="mt-1 text-xs text-neutral-500">
               Bienenstand · {scaleIds.length}{" "}
               {scaleIds.length === 1 ? "Waage" : "Waagen"}
               {device?.lastSeen && (
@@ -178,62 +188,74 @@ export default function HiveDetailModal({
                   />
                 </>
               )}
-              {device?.vBat !== undefined && <> · {device.vBat.toFixed(2)} V</>}
             </div>
+            <VitalChips device={device} reading={current} />
           </div>
           <button
             onClick={onClose}
             aria-label="Schließen"
-            className="shrink-0 rounded p-1 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+            className="shrink-0 rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-900"
           >
             ✕
           </button>
         </div>
 
+        {mainCfg.bme280Enabled !== true && (
+          <div className="mb-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            <span className="font-semibold">
+              ⚠️ Temperatursensor (BMP280) ist deaktiviert
+            </span>
+            <span className="mt-0.5 block text-xs text-amber-800">
+              Alle Waagen dieses Bienenstands werden über einen gemeinsamen
+              BMP280 temperatur-kompensiert. Ohne ihn ist kein zuverlässiges
+              Wiegen möglich – im Einstellungen-Tab aktivieren.
+            </span>
+          </div>
+        )}
+
         <div className="space-y-3">
-          {mainCfg.bme280Enabled !== true && (
-            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-              <span className="font-semibold">
-                ⚠️ Temperatursensor (BMP280) ist deaktiviert
-              </span>
-              <span className="mt-0.5 block text-xs text-amber-800">
-                Alle Waagen dieses Bienenstands werden über einen gemeinsamen
-                BMP280 temperatur-kompensiert. Ohne ihn ist kein zuverlässiges
-                Wiegen möglich – im Einstellungen-Tab aktivieren.
-              </span>
-            </div>
+          {scaleIds.length === 0 && (
+            <p className="rounded-xl border border-dashed border-neutral-300 bg-white px-4 py-8 text-center text-sm text-neutral-500">
+              Noch keine Waage angelegt. Füge unten eine hinzu und wähle ihren
+              HX711-DT-Pin (in der Konfiguration der Waage).
+            </p>
           )}
-          <p className="text-xs text-neutral-500">
-            Hardware/Sensoren (BMP280, INA219, Regen, Wake-Button, SCK/I2C)
-            gelten für alle S3 gemeinsam und stehen unter{" "}
-            <strong>Einstellungen</strong>. Hier legst du nur fest, wie viele
-            Waagen dieser Bienenstand hat und welcher DT-Pin zu welcher gehört.
-          </p>
-            {scaleIds.length === 0 && (
-              <p className="text-sm text-neutral-500">
-                Noch keine Waage angelegt. Füge unten eine hinzu und wähle ihren
-                HX711-DT-Pin.
-              </p>
-            )}
-            <ul className="space-y-3">
-              {scaleIds.map((sid) => {
-                const cfg = scales[sid] ?? { id: sid };
-                return (
-                  <li key={sid} id={`scale-${sid}`} className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2">
-                      <label className="flex items-center gap-1.5 text-xs text-neutral-600">
-                        <input
-                          type="checkbox"
-                          checked={cfg.enabled ?? true}
-                          onChange={(e) =>
-                            updateScaleConfig(deviceId, sid, {
-                              enabled: e.target.checked,
-                            })
-                          }
-                        />
-                        aktiv
-                      </label>
-                      <span className="text-xs text-neutral-500">DT-Pin</span>
+
+          {scaleIds.map((sid) => {
+            const cfg = scales[sid] ?? { id: sid };
+            return (
+              <ScaleCard
+                key={sid}
+                deviceId={deviceId}
+                scaleId={sid}
+                cfg={cfg}
+                reading={current?.scales?.[sid]}
+                readings={windowReadings}
+                prefs={uiPrefs.get(sid)}
+                comments={comments.filter((c) => c.scaleId === sid)}
+                dailyStats={dailyStats}
+                feedStepThresholdKg={mainCfg.feedStepThresholdKg}
+                onPrefsChange={(patch) => uiPrefs.set(sid, patch)}
+                onCalibrate={() => setWizardFor(sid)}
+                onDelete={async () => {
+                  await removeScale(deviceId, sid);
+                }}
+                pinConfig={
+                  <div className="flex flex-wrap items-center gap-3 rounded border border-neutral-200 bg-neutral-50 px-3 py-2">
+                    <label className="flex items-center gap-1.5 text-xs text-neutral-600">
+                      <input
+                        type="checkbox"
+                        checked={cfg.enabled ?? true}
+                        onChange={(e) =>
+                          updateScaleConfig(deviceId, sid, {
+                            enabled: e.target.checked,
+                          })
+                        }
+                      />
+                      Waage aktiv
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs text-neutral-600">
+                      HX711 DT-Pin
                       <PinSelect
                         value={cfg.dtPin ?? DEFAULT_DT_PIN[sid] ?? 0}
                         allowed={ALLOWED_DT_PINS}
@@ -245,57 +267,49 @@ export default function HiveDetailModal({
                         defaultMarker={DEFAULT_DT_PIN[sid]}
                         className="rounded border border-neutral-300 px-2 py-1 text-sm"
                       />
-                    </div>
-                    <ScaleCard
-                      deviceId={deviceId}
-                      scaleId={sid}
-                      cfg={cfg}
-                      reading={current?.scales?.[sid]}
-                      readings={windowReadings}
-                      prefs={uiPrefs.get(sid)}
-                      comments={comments.filter((c) => c.scaleId === sid)}
-                      dailyStats={dailyStats}
-                      feedStepThresholdKg={mainCfg.feedStepThresholdKg}
-                      onPrefsChange={(patch) => uiPrefs.set(sid, patch)}
-                      onCalibrate={() => setWizardFor(sid)}
-                      onDelete={async () => {
-                        await removeScale(deviceId, sid);
-                      }}
-                    />
-                  </li>
-                );
-              })}
-            </ul>
+                    </label>
+                  </div>
+                }
+              />
+            );
+          })}
 
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleAddScale}
-                disabled={adding || scaleIds.length >= 8}
-                className="flex-1 rounded border border-dashed border-neutral-300 px-3 py-2 text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
-              >
-                {adding ? "…" : "+ Waage"}
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  const last = scaleIds[scaleIds.length - 1];
-                  if (!last) return;
-                  if (
-                    !confirm(
-                      `Letzte Waage (${scales[last]?.name || last}) entfernen? ` +
-                        `Kalibrierung und Messwerte dieser Waage werden gelöscht.`,
-                    )
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleAddScale}
+              disabled={adding || scaleIds.length >= 8}
+              className="flex-1 rounded-xl border border-dashed border-neutral-300 bg-white px-3 py-2.5 text-sm font-medium text-neutral-600 transition hover:border-amber-400 hover:text-amber-700 disabled:opacity-50"
+            >
+              {adding ? "…" : "+ Waage"}
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                const last = scaleIds[scaleIds.length - 1];
+                if (!last) return;
+                if (
+                  !confirm(
+                    `Letzte Waage (${scales[last]?.name || last}) entfernen? ` +
+                      `Kalibrierung und Messwerte dieser Waage werden gelöscht.`,
                   )
-                    return;
-                  await removeScale(deviceId, last);
-                }}
-                disabled={scaleIds.length === 0}
-                className="flex-1 rounded border border-dashed border-neutral-300 px-3 py-2 text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
-              >
-                − Letzte Waage
-              </button>
-            </div>
+                )
+                  return;
+                await removeScale(deviceId, last);
+              }}
+              disabled={scaleIds.length === 0}
+              className="flex-1 rounded-xl border border-dashed border-neutral-300 bg-white px-3 py-2.5 text-sm font-medium text-neutral-600 transition hover:border-red-300 hover:text-red-600 disabled:opacity-50"
+            >
+              − Letzte Waage
+            </button>
+          </div>
+
+          <p className="text-[11px] text-neutral-400">
+            Hardware/Sensoren (BMP280, INA219, Regen, Wake-Button, SCK/I2C)
+            gelten für alle Bienenstände gemeinsam und stehen unter
+            Einstellungen. Hier: Waagen-Anzahl, DT-Pin und Kalibrierung je
+            Waage.
+          </p>
         </div>
 
         {wizardFor && (
