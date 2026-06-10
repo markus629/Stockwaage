@@ -34,6 +34,10 @@ type Props = {
   onDelete: () => void | Promise<void>;
   // S3-Bienenstand: Pin-/Aktiv-Einstellungen, gerendert in der Konfiguration.
   pinConfig?: React.ReactNode;
+  // Platzhalter fuer den Namen (z.B. "Waage 01"); Default = Slot-Id.
+  namePlaceholder?: string;
+  // C5: Namenskopf ausblenden (Name steht im Modal-Kopf).
+  hideName?: boolean;
 };
 
 function Chevron({ open }: { open: boolean }) {
@@ -80,6 +84,8 @@ export default function ScaleCard({
   onCalibrate,
   onDelete,
   pinConfig,
+  namePlaceholder,
+  hideName = false,
 }: Props) {
   const calibrated = (cfg.scaleFactor ?? 0) !== 0;
   const kg = reading?.kg;
@@ -89,24 +95,26 @@ export default function ScaleCard({
 
   return (
     <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
-      {/* Kopf: Name + Slot */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 px-4 py-2.5">
-        <DebouncedInput
-          type="text"
-          value={cfg.name ?? ""}
-          placeholder={scaleId}
-          onCommit={(v) => updateScaleConfig(deviceId, scaleId, { name: v })}
-          className="min-w-[110px] flex-1 rounded-md border border-transparent px-2 py-0.5 text-sm font-medium hover:border-neutral-200 focus:border-neutral-300 focus:outline-none"
-        />
-        <span className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[10px] text-neutral-500">
-          {scaleId}
-        </span>
-        {disabled && (
-          <span className="rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">
-            deaktiviert
+      {/* Kopf: Name + Slot (beim S3; bei der C5 steht der Name im Modal-Kopf) */}
+      {!hideName && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 px-4 py-2.5">
+          <DebouncedInput
+            type="text"
+            value={cfg.name ?? ""}
+            placeholder={namePlaceholder ?? scaleId}
+            onCommit={(v) => updateScaleConfig(deviceId, scaleId, { name: v })}
+            className="min-w-[110px] flex-1 rounded-md border border-transparent px-2 py-0.5 text-sm font-medium hover:border-neutral-200 focus:border-neutral-300 focus:outline-none"
+          />
+          <span className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[10px] text-neutral-500">
+            {scaleId}
           </span>
-        )}
-      </div>
+          {disabled && (
+            <span className="rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">
+              deaktiviert
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="space-y-4 p-4">
         {/* Hero: aktuelles Gewicht + Tagestrend */}

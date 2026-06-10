@@ -22,6 +22,9 @@ import { db, ownerUid } from "./firebase";
 export type Device = {
   id: string;
   deviceId?: string;
+  // Vom Imker vergebener Anzeigename (z.B. "Bienenstand 01"). Leer -> Default
+  // aus Typ + laufender Nummer (siehe deviceLabel im Dashboard).
+  name?: string;
   lastSeen?: number;
   vBat?: number;
   intervalSec?: number;
@@ -272,6 +275,49 @@ export function isHiveDevice(d: Device, scaleCount = 0): boolean {
   if (d.boardType === "c5") return false;
   if (typeof d.maxScales === "number") return d.maxScales > 1;
   return scaleCount > 1;
+}
+
+// Schreibt Geraete-Felder (z.B. den Anzeigenamen) ins Device-Dokument.
+export async function updateDevice(
+  deviceId: string,
+  patch: Partial<Pick<Device, "name">>,
+): Promise<void> {
+  await setDoc(deviceDoc(deviceId), patch, { merge: true });
+}
+
+// Eindeutige, stabile Anzeigenamen pro Geraet: eigener Name, sonst Default aus
+// Typ + laufender Nummer je Typ (Bienenstand 01 / Waage 01). Die Nummerierung
+// folgt der sortierten Geraete-ID, ist also unabhaengig von der Datenlage
+// stabil. scaleCounts liefert pro Geraet die Anzahl Waagen (fuer den Typ-
+// Fallback bei Altgeraeten ohne boardType).
+export function buildDeviceLabels(
+  devices: Device[],
+  scaleCounts: Record<string, number> = {},
+): Record<string, { label: string; default: string; isHive: boolean }> {
+  const sorted = [...devices].sort((a, b) => a.id.localeCompare(b.id));
+  let hiveN = 0;
+  let scaleN = 0;
+  const out: Record<
+    string,
+    { label: string; default: string; isHive: boolean }
+  > = {};
+  for (const d of sorted) {
+    const hive = isHiveDevice(d, scaleCounts[d.id] ?? 0);
+    const n = hive ? ++hiveN : ++scaleN;
+    const def = `${hive ? "Bienenstand" : "Waage"} ${String(n).padStart(2, "0")}`;
+    out[d.id] = {
+      default: def,
+      label: d.name?.trim() || def,
+      isHive: hive,
+    };
+  }
+  return out;
+}
+
+// Default-Name einer einzelnen Waage innerhalb eines Bienenstands ("Waage 01").
+export function scaleSlotLabel(scaleId: string): string {
+  const n = parseInt(scaleId.replace(/^s/, ""), 10);
+  return Number.isFinite(n) ? `Waage ${String(n).padStart(2, "0")}` : scaleId;
 }
 
 export const MAX_SCALES = 8;

@@ -17,6 +17,7 @@ import {
   readingsCol,
   removeScale,
   scalesCol,
+  updateDevice,
   type Comment,
   type DailyStat,
   type Device,
@@ -25,6 +26,8 @@ import {
   type ScaleConfig,
 } from "@/lib/devices";
 import CalibrationWizard from "./CalibrationWizard";
+import DebouncedInput from "./DebouncedInput";
+import HiveLogo from "./HiveLogo";
 import OnlineDot from "./OnlineDot";
 import ScaleCard from "./ScaleCard";
 import VitalChips from "./VitalChips";
@@ -37,10 +40,12 @@ const DEFAULT_STACK_DAYS = 7;
 // kommen via mainCfg.
 export default function ScaleDetailModal({
   deviceId,
+  defaultName,
   mainCfg,
   onClose,
 }: {
   deviceId: string;
+  defaultName: string;
   mainCfg: MainConfig;
   onClose: () => void;
 }) {
@@ -138,31 +143,38 @@ export default function ScaleDetailModal({
         className="my-8 w-full max-w-2xl rounded-2xl bg-stone-50 p-4 shadow-2xl sm:p-5"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-4 flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h2 className="flex items-center gap-2 text-lg font-bold">
-              <span
-                aria-hidden
-                className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-lg"
-              >
-                ⚖️
+        <div className="mb-4 flex items-start gap-3">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-50">
+            <HiveLogo variant="single" className="h-9 w-9" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <DebouncedInput
+              type="text"
+              value={device?.name ?? ""}
+              placeholder={defaultName}
+              onCommit={(v) => updateDevice(deviceId, { name: v.trim() })}
+              className="w-full rounded-md border border-transparent px-1.5 py-0.5 text-lg font-bold hover:border-neutral-200 focus:border-amber-300 focus:outline-none"
+            />
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 px-1.5 text-xs text-neutral-500">
+              <span className="rounded bg-stone-200 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-stone-600">
+                Einzelwaage · C5
               </span>
-              <span className="truncate">{cfg.name || deviceId}</span>
-            </h2>
-            <div className="mt-1 text-xs text-neutral-500">
-              {deviceId}
+              <span className="font-mono text-[10px] text-neutral-400">
+                {deviceId}
+              </span>
               {device?.lastSeen && (
-                <>
-                  {" · zuletzt "}
-                  {new Date(device.lastSeen).toLocaleString("de-DE")}
+                <span className="flex items-center">
+                  zuletzt {new Date(device.lastSeen).toLocaleString("de-DE")}
                   <OnlineDot
                     lastSeen={device.lastSeen}
                     intervalSec={device.intervalSec}
                   />
-                </>
+                </span>
               )}
             </div>
-            <VitalChips device={device} reading={current} />
+            <div className="px-1.5">
+              <VitalChips device={device} reading={current} />
+            </div>
           </div>
           <button
             onClick={onClose}
@@ -183,6 +195,7 @@ export default function ScaleDetailModal({
           comments={comments.filter((c) => c.scaleId === sid)}
           dailyStats={dailyStats}
           feedStepThresholdKg={mainCfg.feedStepThresholdKg}
+          hideName
           onPrefsChange={(patch) => uiPrefs.set(sid, patch)}
           onCalibrate={() => setWizardOpen(true)}
           onDelete={async () => {

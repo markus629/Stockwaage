@@ -10,11 +10,13 @@ import {
 import { getDocs, limit, onSnapshot, orderBy, query } from "firebase/firestore";
 import { auth } from "@/lib/firebase";
 import {
+  buildDeviceLabels,
   dailyStatsCol,
   devicesCol,
   globalConfigDoc,
   isHiveDevice,
   readingsCol,
+  scaleSlotLabel,
   scalesCol,
   type DailyStat,
   type Device,
@@ -22,6 +24,7 @@ import {
   type Reading,
 } from "@/lib/devices";
 import OnlineDot, { isOnline } from "@/components/OnlineDot";
+import HiveLogo from "@/components/HiveLogo";
 import FirmwareFleet from "@/components/FirmwareFleet";
 import SettingsPanel from "@/components/SettingsPanel";
 import ScaleDetailModal from "@/components/ScaleDetailModal";
@@ -132,12 +135,17 @@ export default function Home() {
     ? Object.keys(latest[selected]?.scales ?? {}).length
     : 0;
 
+  // Eindeutige Anzeigenamen je Geraet (eigener Name oder Default mit Nummer).
+  const scaleCounts: Record<string, number> = {};
+  for (const d of devices) {
+    scaleCounts[d.id] = Object.keys(latest[d.id]?.scales ?? {}).length;
+  }
+  const labels = buildDeviceLabels(devices, scaleCounts);
+
   // Ein S3-Bienenstand braucht den (gemeinsamen) BMP280 fuer die Temperatur-
   // Kompensation aller Waagen. Ist er global deaktiviert, ist kein gescheites
   // Wiegen moeglich -> Warnung, sobald ueberhaupt ein S3 vorhanden ist.
-  const anyHive = devices.some((d) =>
-    isHiveDevice(d, Object.keys(latest[d.id]?.scales ?? {}).length),
-  );
+  const anyHive = devices.some((d) => labels[d.id]?.isHive);
   const tempSensorMissing = anyHive && mainCfg.bme280Enabled !== true;
 
   async function handleLogin(e: React.FormEvent) {
@@ -256,15 +264,13 @@ export default function Home() {
 
             <ul className="grid items-start gap-3 sm:grid-cols-2">
               {devices.map((d) => {
-                const hive = isHiveDevice(
-                  d,
-                  Object.keys(latest[d.id]?.scales ?? {}).length,
-                );
+                const lbl = labels[d.id];
                 return (
                   <li key={d.id}>
-                    {hive ? (
+                    {lbl?.isHive ? (
                       <HiveTile
                         device={d}
+                        label={lbl.label}
                         latest={latest[d.id]}
                         yCloses={yCloses[d.id]}
                         names={scaleNames[d.id]}
@@ -273,9 +279,9 @@ export default function Home() {
                     ) : (
                       <ScaleTile
                         device={d}
+                        label={lbl?.label ?? d.id}
                         latest={latest[d.id]}
                         yCloses={yCloses[d.id]}
-                        names={scaleNames[d.id]}
                         onClick={() => setSelected(d.id)}
                       />
                     )}
@@ -297,12 +303,14 @@ export default function Home() {
         (isHiveDevice(selectedDevice, hiveScaleCount) ? (
           <HiveDetailModal
             deviceId={selectedDevice.id}
+            defaultName={labels[selectedDevice.id]?.default ?? "Bienenstand"}
             mainCfg={mainCfg}
             onClose={() => setSelected(null)}
           />
         ) : (
           <ScaleDetailModal
             deviceId={selectedDevice.id}
+            defaultName={labels[selectedDevice.id]?.default ?? "Waage"}
             mainCfg={mainCfg}
             onClose={() => setSelected(null)}
           />
@@ -396,38 +404,83 @@ function SummaryStrip({
 const tileClass =
   "block w-full rounded-xl border border-neutral-200 bg-white p-4 text-left shadow-sm transition hover:border-amber-300 hover:shadow-md";
 
+// Gemeinsamer Kachel-Kopf: Logo + Name + Typ-Badge + Geraete-ID + Online-Dot.
+function TileHeader({
+  device,
+  label,
+  variant,
+  subtitle,
+}: {
+  device: Device;
+  label: string;
+  variant: "single" | "multi";
+  subtitle: string;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <div
+        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${
+          variant === "multi" ? "bg-amber-100" : "bg-amber-50"
+        }`}
+      >
+        <HiveLogo variant={variant} className="h-9 w-9" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="truncate font-semibold">{label}</span>
+          <span className="shrink-0 text-xs text-neutral-400">
+            {device.lastSeen ? formatAgo(device.lastSeen) : "—"}
+            <OnlineDot
+              lastSeen={device.lastSeen}
+              intervalSec={device.intervalSec}
+            />
+          </span>
+        </div>
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <span
+            className={`rounded px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide ${
+              variant === "multi"
+                ? "bg-amber-100 text-amber-700"
+                : "bg-stone-200 text-stone-600"
+            }`}
+          >
+            {subtitle}
+          </span>
+          <span className="font-mono text-[10px] text-neutral-400">
+            {device.id}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // C5: eine Waage = eine Kachel.
 function ScaleTile({
   device,
+  label,
   latest,
   yCloses,
-  names,
   onClick,
 }: {
   device: Device;
+  label: string;
   latest: Reading | null | undefined;
   yCloses?: Record<string, number>;
-  names?: Record<string, string>;
   onClick: () => void;
 }) {
   const sid = primarySid(latest);
   const kg = sid ? latest?.scales?.[sid]?.kg : undefined;
   const delta = deltaFor(kg, sid ? yCloses?.[sid] : undefined);
-  const name = (sid && names?.[sid]) || device.id;
 
   return (
     <button type="button" onClick={onClick} className={tileClass}>
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="truncate font-semibold">{name}</span>
-        <span className="shrink-0 text-xs text-neutral-400">
-          {device.lastSeen ? formatAgo(device.lastSeen) : "—"}
-          <OnlineDot lastSeen={device.lastSeen} intervalSec={device.intervalSec} />
-        </span>
-      </div>
-      {name !== device.id && (
-        <div className="text-[11px] text-neutral-400">{device.id}</div>
-      )}
-
+      <TileHeader
+        device={device}
+        label={label}
+        variant="single"
+        subtitle="Einzelwaage · C5"
+      />
       <WeightHero kg={kg} delta={delta} />
       <TileFooter device={device} latest={latest} />
     </button>
@@ -437,12 +490,14 @@ function ScaleTile({
 // S3: Bienenstand = eine Kachel mit allen Waagen.
 function HiveTile({
   device,
+  label,
   latest,
   yCloses,
   names,
   onClick,
 }: {
   device: Device;
+  label: string;
   latest: Reading | null | undefined;
   yCloses?: Record<string, number>;
   names?: Record<string, string>;
@@ -467,19 +522,14 @@ function HiveTile({
 
   return (
     <button type="button" onClick={onClick} className={tileClass}>
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="flex min-w-0 items-center gap-1.5 font-semibold">
-          <span aria-hidden>🐝</span>
-          <span className="truncate">{device.id}</span>
-        </span>
-        <span className="shrink-0 text-xs text-neutral-400">
-          {device.lastSeen ? formatAgo(device.lastSeen) : "—"}
-          <OnlineDot lastSeen={device.lastSeen} intervalSec={device.intervalSec} />
-        </span>
-      </div>
-      <div className="text-[11px] font-medium uppercase tracking-wide text-amber-600">
-        Bienenstand · {sids.length} {sids.length === 1 ? "Waage" : "Waagen"}
-      </div>
+      <TileHeader
+        device={device}
+        label={label}
+        variant="multi"
+        subtitle={`Bienenstand · S3 · ${sids.length} ${
+          sids.length === 1 ? "Waage" : "Waagen"
+        }`}
+      />
 
       <WeightHero
         kg={anySum ? sum : undefined}
@@ -498,7 +548,7 @@ function HiveTile({
                 className="flex items-baseline justify-between gap-2 py-1 text-sm"
               >
                 <span className="truncate text-neutral-600">
-                  {names?.[sid] || sid}
+                  {names?.[sid] || scaleSlotLabel(sid)}
                 </span>
                 <span className="flex shrink-0 items-baseline gap-2">
                   {d !== null && (
