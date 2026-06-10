@@ -34,6 +34,7 @@ import { updateDevice } from "@/lib/devices";
 import CalibrationWizard from "./CalibrationWizard";
 import DebouncedInput from "./DebouncedInput";
 import HiveLogo from "./HiveLogo";
+import KeepAwakeControl from "./KeepAwakeControl";
 import OnlineDot from "./OnlineDot";
 import PinSelect from "./PinSelect";
 import ScaleCard from "./ScaleCard";
@@ -68,6 +69,8 @@ export default function HiveDetailModal({
   const [dailyLoaded, setDailyLoaded] = useState(false);
   const [wizardFor, setWizardFor] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  // Lokaler "Wach halten"-Status dieses Stands (ms-Epoch; 0 = schlaeft).
+  const [awakeUntil, setAwakeUntil] = useState(0);
   const uiPrefs = useScaleUiPrefs(deviceId);
 
   useEffect(() => {
@@ -158,7 +161,7 @@ export default function HiveDetailModal({
     }
   }
 
-  const deepSleep = mainCfg.deepSleepEnabled ?? true;
+  const deepSleep = awakeUntil <= Date.now();
 
   return (
     <div
@@ -225,6 +228,14 @@ export default function HiveDetailModal({
             </span>
           </div>
         )}
+
+        <div className="mb-3">
+          <KeepAwakeControl
+            deviceId={deviceId}
+            awakeUntil={awakeUntil}
+            onChange={setAwakeUntil}
+          />
+        </div>
 
         <div className="space-y-3">
           {scaleIds.length === 0 && (

@@ -28,6 +28,7 @@ import {
 import CalibrationWizard from "./CalibrationWizard";
 import DebouncedInput from "./DebouncedInput";
 import HiveLogo from "./HiveLogo";
+import KeepAwakeControl from "./KeepAwakeControl";
 import OnlineDot from "./OnlineDot";
 import ScaleCard from "./ScaleCard";
 import VitalChips from "./VitalChips";
@@ -59,6 +60,8 @@ export default function ScaleDetailModal({
   const [dailyStats, setDailyStats] = useState<DailyStat[]>([]);
   const [dailyLoaded, setDailyLoaded] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
+  // Lokaler "Wach halten"-Status dieses Geraets (ms-Epoch; 0 = schlaeft).
+  const [awakeUntil, setAwakeUntil] = useState(0);
   const uiPrefs = useScaleUiPrefs(deviceId);
 
   useEffect(() => {
@@ -185,6 +188,14 @@ export default function ScaleDetailModal({
           </button>
         </div>
 
+        <div className="mb-3">
+          <KeepAwakeControl
+            deviceId={deviceId}
+            awakeUntil={awakeUntil}
+            onChange={setAwakeUntil}
+          />
+        </div>
+
         <ScaleCard
           deviceId={deviceId}
           scaleId={sid}
@@ -209,7 +220,7 @@ export default function ScaleDetailModal({
             deviceId={deviceId}
             scale={cfg}
             latestRaw={current?.scales?.[sid]?.raw}
-            deepSleep={mainCfg.deepSleepEnabled ?? true}
+            deepSleep={awakeUntil <= Date.now()}
             onClose={() => setWizardOpen(false)}
           />
         )}

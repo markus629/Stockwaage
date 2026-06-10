@@ -45,27 +45,25 @@ export default function SettingsPanel({ mainCfg }: Props) {
       <Section
         title="Verhalten"
         scope="all"
-        subtitle="Mess- und Update-Verhalten – gilt für jeden ESP (S3 wie C5)."
+        subtitle="Mess- und Update-Verhalten – gilt für jeden ESP (S3 wie C5). Die ESPs schlafen zwischen den Messungen (Akku-Sparmodus). Zum Testen/Kalibrieren hältst du einzelne Geräte gezielt im Geräte-Fenster wach („Wach halten“)."
       >
-        <label className="flex items-start gap-2">
-          <input
-            type="checkbox"
-            checked={mainCfg.deepSleepEnabled ?? true}
-            onChange={(e) => set({ deepSleepEnabled: e.target.checked })}
-            className="mt-1"
-          />
-          <span className="text-sm">
-            Deep Sleep (Akku-Sparmodus)
-            <span className="mt-0.5 block text-xs text-neutral-500">
-              An: Die ESPs schlafen zwischen den Messungen – stromsparend, aber
-              Einstellungen/Updates greifen erst beim nächsten Aufwachen. Aus:
-              Sie bleiben wach und übernehmen Änderungen sofort (höherer
-              Verbrauch). Gemessen wird in beiden Fällen im Intervall.
+        {mainCfg.deepSleepEnabled === false && (
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-900">
+            <span>
+              <strong>Dauer-Wach-Modus aktiv</strong> (alte globale
+              Einstellung): alle ESPs bleiben wach und verbrauchen mehr Akku.
             </span>
-          </span>
-        </label>
+            <button
+              type="button"
+              onClick={() => set({ deepSleepEnabled: true })}
+              className="shrink-0 rounded bg-amber-600 px-2 py-1 font-medium text-white hover:bg-amber-700"
+            >
+              Schlafmodus aktivieren
+            </button>
+          </div>
+        )}
 
-        <label className="mt-3 flex items-start gap-2">
+        <label className="flex items-start gap-2">
           <input
             type="checkbox"
             checked={mainCfg.autoUpdateEnabled ?? false}
@@ -95,9 +93,8 @@ export default function SettingsPanel({ mainCfg }: Props) {
               className="mt-1 w-full rounded border border-neutral-300 px-2 py-1"
             />
             <Hint>
-              {(mainCfg.deepSleepEnabled ?? true)
-                ? "Wirkt ab nächstem ESP-Wakeup."
-                : "Wirkt sofort (Deep Sleep ist aus)."}
+              Wirkt ab dem nächsten Aufwachen des ESP (bzw. sofort, solange ein
+              Gerät im Testmodus wach gehalten wird).
             </Hint>
           </Field>
         </div>
