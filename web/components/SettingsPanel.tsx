@@ -43,8 +43,9 @@ export default function SettingsPanel({ mainCfg }: Props) {
   return (
     <div className="space-y-4">
       <Section
-        title="Allgemein"
-        subtitle="Diese Werte gelten für alle ESPs gleichzeitig."
+        title="Verhalten"
+        scope="all"
+        subtitle="Mess- und Update-Verhalten – gilt für jeden ESP (S3 wie C5)."
       >
         <label className="flex items-start gap-2">
           <input
@@ -103,11 +104,12 @@ export default function SettingsPanel({ mainCfg }: Props) {
       </Section>
 
       <Section
-        title="Futter-Tracker"
-        subtitle="Für die Futter-Reichweite: wie groß darf eine Tagesänderung sein, damit sie noch als Verbrauch zählt? Größere Sprünge (Füttern, Durchsicht) werden ignoriert."
+        title="Auswertung & Alarme"
+        scope="dashboard"
+        subtitle="Rein clientseitige Auswertung im Dashboard – am Gerät ändert sich nichts. Futter-Reichweite: wie groß darf eine Tagesänderung sein, damit sie noch als Verbrauch zählt? Größere Sprünge (Füttern, Durchsicht) werden ignoriert."
       >
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Sprung-Schwelle (kg/Tag)">
+          <Field label="Futter-Sprung-Schwelle (kg/Tag)">
             <DebouncedInput
               type="number"
               min={0.1}
@@ -127,14 +129,23 @@ export default function SettingsPanel({ mainCfg }: Props) {
         </div>
       </Section>
 
-      <div className="pt-2">
-        <h2 className="text-sm font-semibold text-neutral-700">
-          S3-Bienenstand · Hardware
-        </h2>
-        <p className="mt-0.5 text-xs text-neutral-500">
-          Gilt für alle S3 (alle gleich aufgebaut). Die DT-Pins der einzelnen
-          Waagen stellst du pro Gerät im Bienenstand-Fenster ein. Die C5
-          ignoriert diese Einstellungen.
+      <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-4">
+        <div className="flex items-start justify-between gap-2">
+          <h2 className="text-sm font-semibold text-amber-900">
+            🐝 Bienenstand-Hardware
+          </h2>
+          <ScopeBadge scope="s3" />
+        </div>
+        <p className="mt-1 text-xs text-amber-800/90">
+          Alle S3 sind baugleich – Sensoren und Bus-Pins gelten daher gemeinsam.
+          <strong>
+            {" "}
+            Anzahl der Waagen und der DT-Pin je Waage sind dagegen pro Stand
+            individuell
+          </strong>{" "}
+          (5 Völker hier, 7 dort) – das stellst du im jeweiligen
+          Bienenstand-Fenster über <em>+ Waage</em> / <em>− Waage</em> ein. Die
+          C5 ignoriert diese Einstellungen (feste Hardware).
         </p>
       </div>
 
@@ -316,18 +327,52 @@ function hex(n: number | undefined): string {
   return "0x" + n.toString(16).toUpperCase().padStart(2, "0");
 }
 
+// Reichweiten-Badge: macht je Abschnitt sofort klar, WORAUF eine Einstellung
+// wirkt – das ist der Schluessel zur Nachvollziehbarkeit.
+type ScopeKind = "all" | "dashboard" | "s3";
+
+function ScopeBadge({ scope }: { scope: ScopeKind }) {
+  const map: Record<ScopeKind, { label: string; cls: string }> = {
+    all: {
+      label: "Alle Geräte",
+      cls: "bg-stone-200 text-stone-600",
+    },
+    dashboard: {
+      label: "Nur Dashboard",
+      cls: "bg-sky-100 text-sky-700",
+    },
+    s3: {
+      label: "Alle Bienenstände (S3)",
+      cls: "bg-amber-100 text-amber-700",
+    },
+  };
+  const { label, cls } = map[scope];
+  return (
+    <span
+      className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${cls}`}
+    >
+      {label}
+    </span>
+  );
+}
+
 function Section({
   title,
   subtitle,
+  scope,
   children,
 }: {
   title: string;
   subtitle?: string;
+  scope?: ScopeKind;
   children: React.ReactNode;
 }) {
   return (
     <section className="rounded-lg border border-neutral-200 bg-white p-4">
-      <h3 className="text-sm font-semibold">{title}</h3>
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        {scope && <ScopeBadge scope={scope} />}
+      </div>
       {subtitle && (
         <p className="mb-3 mt-0.5 text-xs text-neutral-500">{subtitle}</p>
       )}
